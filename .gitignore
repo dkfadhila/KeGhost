@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.db
+.venv/
+venv/
+.env
+.vercel
+.DS_Store
+flora-ui-prompt.txt
+*.log

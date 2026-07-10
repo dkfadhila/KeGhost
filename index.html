@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KeGhost • Cek Ghost Ban X</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cream: { 50: '#FFFBF5', 100: '#FFF8F0', 200: '#F5EDE0', 300: '#E8D5C4' },
+            cocoa: { 300: '#D4B896', 400: '#C8A982', 500: '#B8956A', 700: '#8B6F4E', 800: '#6B5344' },
+            sage: { 200: '#D4E5CE', 300: '#B5CDA8', 400: '#A8C4A0', 500: '#7FA87A' },
+            peach: { 200: '#FFE8E0', 300: '#F4C2C2', 400: '#E8A0A0', 500: '#D48484' },
+            lav: { 200: '#EDE4F5', 300: '#D4C5E2', 400: '#B8A4D0' },
+            ink: { 500: '#7A6A5A', 700: '#5C4E42', 900: '#3D3229' }
+          },
+          fontFamily: {
+            display: ['"Baloo 2"', 'cursive'],
+            body: ['Nunito', 'system-ui', 'sans-serif']
+          },
+          boxShadow: {
+            soft: '0 8px 28px rgba(139, 111, 78, 0.10)',
+            card: '0 6px 20px rgba(139, 111, 78, 0.08)',
+            lift: '0 14px 36px rgba(139, 111, 78, 0.16)',
+            pill: '0 4px 14px rgba(200, 169, 130, 0.25)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --cream: #FFF8F0;
+      --cream-deep: #F5EDE0;
+      --cocoa: #C8A982;
+      --sage: #A8C4A0;
+      --peach: #F4C2C2;
+      --ink: #5C4E42;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Nunito', system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%, rgba(244, 194, 194, 0.35), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 90% 10%, rgba(168, 196, 160, 0.28), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 50% 100%, rgba(212, 197, 226, 0.25), transparent 55%),
+        linear-gradient(180deg, #FFFBF5 0%, #FFF8F0 40%, #F5EDE0 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .font-display { font-family: 'Baloo 2', cursive; }
+
+    /* Floating background bits */
+    .float-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .float-bit {
+      position: absolute;
+      font-size: 1.25rem;
+      opacity: 0.18;
+      animation: floaty linear infinite;
+      filter: blur(0.2px);
+      user-select: none;
+    }
+    @keyframes floaty {
+      0%   { transform: translateY(0) rotate(0deg); }
+      50%  { transform: translateY(-28px) rotate(8deg); }
+      100% { transform: translateY(0) rotate(0deg); }
+    }
+
+    /* Entrance */
+    .enter {
+      opacity: 0;
+      transform: translateY(22px);
+      animation: riseIn 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes riseIn {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Capy breathing idle */
+    .breathe {
+      animation: breathe 3.2s ease-in-out infinite;
+      transform-origin: center bottom;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+
+    /* Bounce for loading */
+    .capy-bounce {
+      animation: capyBounce 0.7s ease-in-out infinite;
+    }
+    @keyframes capyBounce {
+      0%, 100% { transform: translateY(0) rotate(-4deg); }
+      50% { transform: translateY(-12px) rotate(4deg); }
+    }
+
+    .capy-wiggle {
+      animation: capyWiggle 0.45s ease-in-out infinite;
+      display: inline-block;
+    }
+    @keyframes capyWiggle {
+      0%, 100% { transform: rotate(-10deg); }
+      50% { transform: rotate(10deg); }
+    }
+
+    /* Card pop */
+    .pop-in {
+      opacity: 0;
+      transform: scale(0.82) translateY(12px);
+      animation: popIn 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+    }
+    @keyframes popIn {
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Status pulses */
+    .pulse-warn {
+      animation: pulseWarn 1.8s ease-in-out infinite;
+    }
+    @keyframes pulseWarn {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.35); }
+      50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
+    }
+    .pulse-ban {
+      animation: pulseBan 1.6s ease-in-out infinite;
+    }
+    @keyframes pulseBan {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(232, 160, 160, 0.45); }
+      50% { box-shadow: 0 0 0 8px rgba(232, 160, 160, 0); }
+    }
+    .bounce-safe {
+      animation: bounceSafe 1.4s ease-in-out infinite;
+    }
+    @keyframes bounceSafe {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+
+    /* Result card hover */
+    .result-card {
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .result-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 14px 36px rgba(139, 111, 78, 0.16);
+    }
+
+    /* Suggestions slide */
+    .slide-up {
+      opacity: 0;
+      transform: translateY(24px);
+      animation: slideUp 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    @keyframes slideUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Crossfade states */
+    .fade-swap {
+      animation: fadeSwap 0.35s ease forwards;
+    }
+    @keyframes fadeSwap {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Pill input focus */
+    .search-pill:focus-within {
+      border-color: #C8A982;
+      box-shadow: 0 0 0 4px rgba(200, 169, 130, 0.22);
+    }
+
+    /* Button press */
+    .btn-cek {
+      transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .btn-cek:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 24px rgba(184, 149, 106, 0.35);
+    }
+    .btn-cek:active:not(:disabled) {
+      transform: translateY(0) scale(0.98);
+    }
+    .btn-cek:disabled {
+      opacity: 0.75;
+      cursor: wait;
+    }
+
+    /* Header capy eye-follow tilt */
+    .capy-head {
+      transition: transform 0.25s ease;
+      display: inline-block;
+    }
+    .capy-head.look-right { transform: rotate(8deg) translateX(2px); }
+    .capy-head.look-left { transform: rotate(-8deg) translateX(-2px); }
+
+    /* Metric bar */
+    .metric-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #F5EDE0;
+      overflow: hidden;
+    }
+    .metric-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+      width: 0;
+    }
+
+    /* Soft card surface */
+    .surface {
+      background: rgba(255, 251, 245, 0.92);
+      border: 1.5px solid rgba(232, 213, 196, 0.9);
+      backdrop-filter: blur(8px);
+    }
+
+    /* Hide until ready */
+    .state-panel { display: none; }
+    .state-panel.is-active { display: block; }
+  </style>
+</head>
+<body class="font-body">
+  <!-- Floating cozy bits -->
+  <div class="float-layer" id="float-layer" aria-hidden="true"></div>
+
+  <div class="relative z-10 max-w-[720px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
+
+    <!-- Header -->
+    <header class="text-center mb-8 enter" style="animation-delay: 0.05s">
+      <div class="inline-flex items-center justify-center gap-3 mb-3">
+        <span id="header-capy" class="capy-head text-5xl sm:text-6xl select-none" title="Capybara">🦫</span>
+      </div>
+      <h1 class="font-display text-4xl sm:text-5xl font-bold text-cocoa-700 tracking-tight">
+        KeGhost
+      </h1>
+      <p class="mt-1.5 text-ink-500 text-base sm:text-lg font-semibold">
+        Kamu ke-ghost sama X? 👀
+      </p>
+      <p class="mt-1 text-sm text-ink-500/80">
+        Cek 6 jenis shadowban biar capybara bantu ngejelasin
+      </p>
+    </header>
+
+    <!-- Search -->
+    <section class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-6 enter" style="animation-delay: 0.15s">
+      <label for="username" class="block text-sm font-bold text-cocoa-700 mb-2.5">
+        Username X / Twitter
+      </label>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="search-pill flex-1 flex items-center gap-2 bg-cream-100 border-[1.5px] border-cream-300 rounded-full px-4 py-1.5 transition-all">
+          <span class="text-ink-500 font-bold text-lg">@</span>
+          <input
+            id="username"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="misal: elonmusk"
+            class="w-full bg-transparent py-2.5 text-base sm:text-lg font-semibold text-ink-900 placeholder:text-ink-500/40 outline-none"
+          />
+        </div>
+        <button id="btn-cek" type="button" class="btn-cek shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 hover:bg-cocoa-500 text-white font-extrabold px-6 py-3.5 shadow-pill">
+          <span id="btn-capy" class="text-xl leading-none">🦫</span>
+          <span id="btn-label">Cek Ghost</span>
+        </button>
+      </div>
+      <p id="input-hint" class="mt-2.5 text-xs text-ink-500/70 font-medium">
+        Tip: tanpa @ juga boleh. Enter = cek langsung ✨
+      </p>
+    </section>
+
+    <!-- Main panels -->
+    <section class="mb-6 enter" style="animation-delay: 0.25s">
+
+      <!-- Empty state -->
+      <div id="state-empty" class="state-panel is-active surface rounded-[28px] shadow-soft px-6 py-12 text-center fade-swap">
+        <div class="breathe text-7xl sm:text-8xl mb-4 select-none" aria-hidden="true">🦫</div>
+        <h2 class="font-display text-2xl text-cocoa-700 font-bold">Masukin username dulu yuk</h2>
+        <p class="mt-2 text-ink-500 font-medium max-w-sm mx-auto">
+          Capybara lagi santai nunggu. Kasih username X-nya, nanti kita cek bareng 🍊
+        </p>
+        <div class="mt-6 flex flex-wrap justify-center gap-2">
+          <span class="text-xs font-bold px-3 py-1.5 rounded-full bg-sage-200 text-sage-500">Search Ban</span>
+          <span class="text-xs font-bold px-3 py-1.5 rounded-full bg-peach-200 text-peach-500">Ghost Ban</span>
+          <span class="text-xs font-bold px-3 py-1.5 rounded-full bg-lav-200 text-lav-400">Reply Ban</span>
+          <span class="text-xs font-bold px-3 py-1.5 rounded-full bg-cream-300 text-cocoa-700">+3 lagi</span>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="state-loading" class="state-panel surface rounded-[28px] shadow-soft px-6 py-14 text-center fade-swap">
+        <div class="capy-bounce text-7xl mb-4 select-none" aria-hidden="true">🦫</div>
+        <h2 class="font-display text-2xl text-cocoa-700 font-bold">Capybara lagi nyari jejak…</h2>
+        <p class="mt-2 text-ink-500 font-medium">Sabar ya, lagi ngecek 6 deteksi shadowban ✨</p>
+        <div class="mt-6 flex justify-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-cocoa-400 animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-sage-400 animate-bounce" style="animation-delay:120ms"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-peach-400 animate-bounce" style="animation-delay:240ms"></span>
+        </div>
+      </div>
+
+      <!-- Error state -->
+      <div id="state-error" class="state-panel surface rounded-[28px] shadow-soft px-6 py-12 text-center fade-swap">
+        <div class="capy-wiggle text-7xl mb-4 select-none" aria-hidden="true">🦫</div>
+        <h2 class="font-display text-2xl text-peach-500 font-bold">Yah capybara-nya bingung nih</h2>
+        <p id="error-msg" class="mt-2 text-ink-500 font-medium max-w-sm mx-auto">
+          Coba lagi yuk 🦫
+        </p>
+        <button type="button" onclick="setState('empty')" class="mt-5 inline-flex items-center gap-2 rounded-full bg-peach-300 hover:bg-peach-400 text-ink-900 font-extrabold px-5 py-2.5 transition">
+          Coba lagi
+        </button>
+      </div>
+
+      <!-- Results state -->
+      <div id="state-results" class="state-panel fade-swap">
+        <!-- Overall -->
+        <div class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wide text-ink-500/70">Hasil cek</div>
+              <div id="result-username" class="font-display text-3xl text-cocoa-700 font-bold mt-0.5"></div>
+              <div class="text-xs text-ink-500/70 mt-1 font-medium" id="check-time"></div>
+            </div>
+            <div id="overall-badge" class="inline-flex items-center gap-2 rounded-full px-4 py-2 font-extrabold text-sm shadow-card"></div>
+          </div>
+
+          <!-- Metrics -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+            <div class="rounded-2xl bg-cream-100 border border-cream-300 p-3">
+              <div class="text-[11px] font-bold text-ink-500/70 uppercase">Search</div>
+              <div id="metric-search" class="font-display text-2xl text-cocoa-700 font-bold mt-0.5">—</div>
+              <div class="metric-bar mt-2"><div id="bar-search" class="metric-fill bg-sage-400"></div></div>
+            </div>
+            <div class="rounded-2xl bg-cream-100 border border-cream-300 p-3">
+              <div class="text-[11px] font-bold text-ink-500/70 uppercase">Reply</div>
+              <div id="metric-reply" class="font-display text-2xl text-cocoa-700 font-bold mt-0.5">—</div>
+              <div class="metric-bar mt-2"><div id="bar-reply" class="metric-fill bg-cocoa-400"></div></div>
+            </div>
+            <div class="rounded-2xl bg-cream-100 border border-cream-300 p-3">
+              <div class="text-[11px] font-bold text-ink-500/70 uppercase">Quote</div>
+              <div id="metric-quote" class="font-display text-2xl text-cocoa-700 font-bold mt-0.5">—</div>
+              <div class="metric-bar mt-2"><div id="bar-quote" class="metric-fill bg-lav-400"></div></div>
+            </div>
+            <div class="rounded-2xl bg-cream-100 border border-cream-300 p-3">
+              <div class="text-[11px] font-bold text-ink-500/70 uppercase">Engage</div>
+              <div id="metric-engagement" class="font-display text-2xl text-cocoa-700 font-bold mt-0.5">—</div>
+              <div class="metric-bar mt-2"><div id="bar-engagement" class="metric-fill bg-peach-400"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Test cards -->
+        <div id="test-results" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"></div>
+
+        <!-- Suggestions -->
+        <div id="saran-wrap" class="surface rounded-[28px] shadow-soft p-5 sm:p-6 slide-up">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl">🦫</span>
+            <h3 class="font-display text-xl text-cocoa-700 font-bold">Capybara bilang…</h3>
+          </div>
+          <div id="saran-panel" class="space-y-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center pb-6 enter" style="animation-delay: 0.35s">
+      <p class="text-sm font-semibold text-ink-500/70">
+        Made by
+        <a
+          href="https://x.com/peachymoo_"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-cocoa-700 hover:text-peach-500 font-extrabold underline decoration-cocoa-300 underline-offset-2 transition"
+        >PICA</a>
+      </p>
+      <p class="text-xs text-ink-500/50 mt-1">
+        KeGhost · cozy shadowban checker 🦫
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const saranDetail = {
+      "Search Ban": {
+        why: "Akunmu nggak muncul pas orang cari username kamu.",
+        how: "Kurangi posting spam, hindari kata sensitif, dan post natural aja ya."
+      },
+      "Ghost Ban": {
+        why: "Tweetmu cuma keliatan sama follower, nggak muncul di timeline orang lain.",
+        how: "Pelanin frekuensi posting, jangan spam link/mention, chill dulu sebentar."
+      },
+      "Reply Ban": {
+        why: "Reply kamu nggak muncul di thread orang yang kamu reply.",
+        how: "Jangan reply terlalu cepet atau berulang-ulang ke orang yang sama."
+      },
+      "Quote Ban": {
+        why: "Visibility quote tweetmu dibatasi algoritma.",
+        how: "Hindari konten kontroversial berlebihan dan jangan quote spam."
+      },
+      "Typeahead Ban": {
+        why: "Akunmu nggak muncul pas orang ngetik username di search bar.",
+        how: "Biasanya karena aktivitas aneh. Kurangi aktivitas berlebih dulu ya."
+      },
+      "Hashtag Ban": {
+        why: "Tweet ber-hashtag nggak keliatan di pencarian hashtag.",
+        how: "Jangan pake hashtag yang sama terus. Variasiin biar natural."
+      }
+    };
+
+    const testEmoji = {
+      "Search Ban": "🔎",
+      "Ghost Ban": "👻",
+      "Reply Ban": "💬",
+      "Quote Ban": "🔁",
+      "Typeahead Ban": "⌨️",
+      "Hashtag Ban": "#️⃣"
+    };
+
+    const statusMeta = {
+      safe: {
+        label: "Aman",
+        face: "😊",
+        card: "bg-sage-200/50 border-sage-300",
+        badge: "bg-sage-300 text-ink-900 bounce-safe",
+        overall: "bg-sage-300 text-ink-900",
+        overallText: "Aman banget 😊"
+      },
+      warning: {
+        label: "Waspada",
+        face: "🤔",
+        card: "bg-amber-50 border-amber-200",
+        badge: "bg-amber-200 text-amber-900 pulse-warn",
+        overall: "bg-amber-200 text-amber-900 pulse-warn",
+        overallText: "Agak shady 🤔"
+      },
+      banned: {
+        label: "Kena",
+        face: "😢",
+        card: "bg-peach-200/60 border-peach-300",
+        badge: "bg-peach-300 text-ink-900 pulse-ban",
+        overall: "bg-peach-300 text-ink-900 pulse-ban",
+        overallText: "Ke-ghost nih 😢"
+      }
+    };
+
+    // Floating decorations
+    (function spawnFloats() {
+      const layer = document.getElementById('float-layer');
+      const bits = ['🦫', '🍊', '🍃', '✨', '🦫', '🍊', '🍃', '🦫', '✨', '🍊'];
+      bits.forEach((bit, i) => {
+        const el = document.createElement('span');
+        el.className = 'float-bit';
+        el.textContent = bit;
+        el.style.left = (4 + (i * 9.5) % 92) + '%';
+        el.style.top = (8 + ((i * 17) % 80)) + '%';
+        el.style.animationDuration = (10 + (i % 5) * 2.2) + 's';
+        el.style.animationDelay = (i * 0.6) + 's';
+        el.style.fontSize = (0.9 + (i % 3) * 0.35) + 'rem';
+        layer.appendChild(el);
+      });
+    })();
+
+    // State machine
+    function setState(name) {
+      ['empty', 'loading', 'error', 'results'].forEach(s => {
+        const el = document.getElementById('state-' + s);
+        if (!el) return;
+        el.classList.toggle('is-active', s === name);
+        if (s === name) {
+          el.classList.remove('fade-swap');
+          void el.offsetWidth;
+          el.classList.add('fade-swap');
+        }
+      });
+    }
+
+    // Header capy follows typing a bit
+    const usernameInput = document.getElementById('username');
+    const headerCapy = document.getElementById('header-capy');
+    usernameInput.addEventListener('input', () => {
+      const len = usernameInput.value.length;
+      headerCapy.classList.remove('look-left', 'look-right');
+      if (len === 0) return;
+      headerCapy.classList.add(len % 2 === 0 ? 'look-right' : 'look-left');
+    });
+    usernameInput.addEventListener('blur', () => {
+      headerCapy.classList.remove('look-left', 'look-right');
+    });
+    usernameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') checkShadowban();
+    });
+
+    document.getElementById('btn-cek').addEventListener('click', checkShadowban);
+
+    async function checkShadowban() {
+      const username = usernameInput.value.trim().replace(/^@+/, '');
+      if (!username) {
+        usernameInput.focus();
+        headerCapy.classList.add('capy-wiggle');
+        setTimeout(() => headerCapy.classList.remove('capy-wiggle'), 700);
+        return;
+      }
+
+      const btn = document.getElementById('btn-cek');
+      const btnCapy = document.getElementById('btn-capy');
+      const btnLabel = document.getElementById('btn-label');
+      btn.disabled = true;
+      btnCapy.classList.add('capy-bounce');
+      btnLabel.textContent = 'Ngecek…';
+      setState('loading');
+
+      try {
+        const res = await fetch('/api/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderResults(data);
+        setState('results');
+      } catch (err) {
+        document.getElementById('error-msg').textContent =
+          'Yah capybara-nya bingung nih, coba lagi yuk 🦫';
+        setState('error');
+      } finally {
+        btn.disabled = false;
+        btnCapy.classList.remove('capy-bounce');
+        btnLabel.textContent = 'Cek Ghost';
+      }
+    }
+
+    function renderResults(data) {
+      document.getElementById('result-username').textContent = '@' + data.username;
+
+      const overall = (data.overall || 'safe').toLowerCase();
+      const meta = statusMeta[overall] || statusMeta.safe;
+      const badge = document.getElementById('overall-badge');
+      badge.className = 'inline-flex items-center gap-2 rounded-full px-4 py-2 font-extrabold text-sm shadow-card ' + meta.overall;
+      badge.innerHTML = `<span class="text-lg leading-none">${meta.face}</span><span>${meta.overallText}</span>`;
+
+      const ts = data.timestamp ? new Date(data.timestamp) : new Date();
+      document.getElementById('check-time').textContent =
+        'Dicek ' + ts.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+
+      const metrics = data.metrics || {};
+      setMetric('search', metrics.search);
+      setMetric('reply', metrics.reply);
+      setMetric('quote', metrics.quote);
+      setMetric('engagement', metrics.engagement);
+
+      const container = document.getElementById('test-results');
+      container.innerHTML = '';
+      (data.tests || []).forEach((test, i) => {
+        const st = (test.status || 'safe').toLowerCase();
+        const sm = statusMeta[st] || statusMeta.safe;
+        const emoji = testEmoji[test.name] || '✨';
+        const card = document.createElement('div');
+        card.className = `result-card pop-in rounded-[22px] border-[1.5px] p-4 shadow-card ${sm.card}`;
+        card.style.animationDelay = (i * 0.08) + 's';
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2.5 min-w-0">
+              <span class="text-2xl leading-none shrink-0">${emoji}</span>
+              <div class="min-w-0">
+                <div class="font-extrabold text-ink-900 text-[15px] leading-tight">${escapeHtml(test.name)}</div>
+                <div class="text-xs text-ink-500 mt-1 font-medium leading-snug">${escapeHtml(test.desc || '')}</div>
+              </div>
+            </div>
+            <div class="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${sm.badge}">
+              <span>${sm.face}</span><span>${sm.label}</span>
+            </div>
+          </div>
+          ${typeof test.confidence === 'number' ? `
+            <div class="mt-3 flex items-center gap-2">
+              <div class="metric-bar flex-1"><div class="metric-fill ${st === 'safe' ? 'bg-sage-400' : st === 'warning' ? 'bg-amber-300' : 'bg-peach-400'}" style="width:${Math.min(100, test.confidence)}%"></div></div>
+              <span class="text-[10px] font-bold text-ink-500/70">${test.confidence}%</span>
+            </div>` : ''}
+        `;
+        container.appendChild(card);
+      });
+
+      // Suggestions — capybara voice
+      const saranContainer = document.getElementById('saran-panel');
+      saranContainer.innerHTML = '';
+      const saranWrap = document.getElementById('saran-wrap');
+      saranWrap.classList.remove('slide-up');
+      void saranWrap.offsetWidth;
+      saranWrap.classList.add('slide-up');
+
+      let adaSaran = false;
+      (data.tests || []).forEach(test => {
+        const st = (test.status || '').toLowerCase();
+        if ((st === 'banned' || st === 'warning') && saranDetail[test.name]) {
+          adaSaran = true;
+          const sm = statusMeta[st] || statusMeta.warning;
+          const face = st === 'banned' ? '😢' : '🤔';
+          const div = document.createElement('div');
+          div.className = `rounded-2xl border-[1.5px] p-3.5 ${sm.card}`;
+          div.innerHTML = `
+            <div class="font-extrabold text-ink-900 text-sm flex items-center gap-1.5">
+              <span>${face}</span>
+              <span>Hee, kamu kena ${escapeHtml(test.name)} nih…</span>
+            </div>
+            <p class="text-xs text-ink-500 mt-1.5 font-medium leading-relaxed">
+              <span class="font-bold text-ink-700">Kenapa:</span> ${escapeHtml(saranDetail[test.name].why)}
+            </p>
+            <p class="text-xs text-ink-500 mt-1 font-medium leading-relaxed">
+              <span class="font-bold text-sage-500">Coba gini:</span> ${escapeHtml(saranDetail[test.name].how)}
+            </p>
+          `;
+          saranContainer.appendChild(div);
+        }
+      });
+
+      if (!adaSaran) {
+        const div = document.createElement('div');
+        div.className = 'rounded-2xl border-[1.5px] border-sage-300 bg-sage-200/50 p-4';
+        div.innerHTML = `
+          <div class="font-extrabold text-ink-900 text-sm flex items-center gap-1.5">
+            <span>😊</span>
+            <span>Wah aman! Capybara senyum lebar</span>
+          </div>
+          <p class="text-xs text-ink-500 mt-1.5 font-medium leading-relaxed">
+            Akun kamu lagi bagus nih. Pertahanin aktivitas natural, jangan spam, dan tetap chill kayak capybara di onsen 🍊🦫
+          </p>
+        `;
+        saranContainer.appendChild(div);
+      }
+    }
+
+    function setMetric(key, value) {
+      const num = typeof value === 'number' ? value : 0;
+      document.getElementById('metric-' + key).textContent = num + '%';
+      const bar = document.getElementById('bar-' + key);
+      // restart width anim
+      bar.style.width = '0%';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bar.style.width = Math.max(0, Math.min(100, num)) + '%';
+        });
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Boot
+    window.addEventListener('DOMContentLoaded', () => {
+      usernameInput.focus();
+    });
+  </script>
+</body>
+</html>
