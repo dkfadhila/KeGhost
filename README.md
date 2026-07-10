@@ -19,6 +19,4 @@ KeGhost looks at common visibility issues, including:
 
 Shadowbans are confusing. You keep posting, but engagement drops and people say they cannot find you. KeGhost gives a simple, friendly way to check those signs and understand what might be going on.
 
-## Built by
 
-[PICA](https://x.com/peachymoo_)
