@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#FFF8F0" />
-  <title>KeGhost • Cek Shadowban X</title>
+  <title>KeGhost • 8 Lapis Shadowban Audit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -12,353 +12,608 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            cream: { 50:'#FFFBF5',100:'#FFF8F0',200:'#F5EDE0',300:'#E8D5C4' },
-            cocoa: { 300:'#D4B896',400:'#C8A982',500:'#B8956A',700:'#8B6F4E',800:'#6B5344' },
-            sage: { 200:'#D4E5CE',300:'#B5CDA8',400:'#A8C4A0',500:'#7FA87A' },
-            peach: { 200:'#FFE8E0',300:'#F4C2C2',400:'#E8A0A0',500:'#D48484' },
-            lav: { 200:'#EDE4F5',300:'#D4C5E2',400:'#B8A4D0' },
-            ink: { 500:'#7A6A5A',700:'#5C4E42',900:'#3D3229' }
-          },
-          fontFamily: { display:['"Baloo 2"','cursive'], body:['Nunito','system-ui','sans-serif'] },
-          boxShadow: { soft:'0 8px 28px rgba(139,111,78,0.10)', card:'0 6px 20px rgba(139,111,78,0.08)', pill:'0 4px 14px rgba(200,169,130,0.25)' }
-        }
-      }
+      theme: { extend: {
+        colors: {
+          cream:{50:'#FFFBF5',100:'#FFF8F0',200:'#F5EDE0',300:'#E8D5C4'},
+          cocoa:{300:'#D4B896',400:'#C8A982',500:'#B8956A',700:'#8B6F4E',800:'#6B5344'},
+          sage:{200:'#D4E5CE',300:'#B5CDA8',400:'#A8C4A0',500:'#7FA87A'},
+          peach:{200:'#FFE8E0',300:'#F4C2C2',400:'#E8A0A0',500:'#D48484'},
+          lav:{200:'#EDE4F5',300:'#D4C5E2',400:'#B8A4D0'},
+          ink:{500:'#7A6A5A',700:'#5C4E42',900:'#3D3229'}
+        },
+        fontFamily:{display:['"Baloo 2"','cursive'],body:['Nunito','system-ui','sans-serif']},
+        boxShadow:{soft:'0 8px 28px rgba(139,111,78,.10)',card:'0 6px 20px rgba(139,111,78,.08)',pill:'0 4px 14px rgba(200,169,130,.25)'}
+      }}
     }
   </script>
   <style>
-    :root { --cream:#FFF8F0; --cocoa:#C8A982; --sage:#A8C4A0; --peach:#F4C2C2; --ink:#5C4E42; }
-    * { box-sizing:border-box; }
-    html { -webkit-text-size-adjust:100%; }
-    body {
-      font-family:'Nunito',system-ui,sans-serif; color:var(--ink);
-      background:
-        radial-gradient(ellipse 80% 50% at 10% 0%,rgba(244,194,194,0.35),transparent 55%),
-        radial-gradient(ellipse 70% 45% at 90% 10%,rgba(168,196,160,0.28),transparent 50%),
-        radial-gradient(ellipse 60% 40% at 50% 100%,rgba(212,197,226,0.25),transparent 55%),
-        linear-gradient(180deg,#FFFBF5 0%,#FFF8F0 40%,#F5EDE0 100%);
-      min-height:100vh; overflow-x:hidden;
-      padding-left:max(0px,env(safe-area-inset-left));
-      padding-right:max(0px,env(safe-area-inset-right));
-      padding-bottom:max(12px,env(safe-area-inset-bottom));
+    :root {
+      --bg: #FFF8F0; --bg-grad1: rgba(244,194,194,.35); --bg-grad2: rgba(168,196,160,.28); --bg-grad3: rgba(212,197,226,.25);
+      --surface: rgba(255,251,245,.92); --border: rgba(232,213,196,.9); --text: #5C4E42; --text-muted: #7A6A5A;
+      --cream-100: #FFF8F0; --cream-200: #F5EDE0; --cream-300: #E8D5C4; --cocoa-400: #C8A982; --cocoa-700: #8B6F4E;
+      --sage-200: #D4E5CE; --sage-400: #A8C4A0; --peach-200: #FFE8E0; --peach-300: #F4C2C2; --lav-200: #EDE4F5;
     }
-    .font-display { font-family:'Baloo 2',cursive; }
-    input,button,textarea { font-size:16px; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
-    .float-layer { position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
-    .float-bit { position:absolute; font-size:1.25rem; opacity:0.15; animation:floaty linear infinite; user-select:none; }
+    [data-theme="dark"] {
+      --bg: #1a1620; --bg-grad1: rgba(139,111,78,.08); --bg-grad2: rgba(168,196,160,.06); --bg-grad3: rgba(212,197,226,.06);
+      --surface: rgba(30,25,38,.92); --border: rgba(80,70,60,.5); --text: #E8DDD0; --text-muted: #A89380;
+      --cream-100: #2a2430; --cream-200: #241e2c; --cream-300: #3a3340; --cocoa-400: #8B6F4E; --cocoa-700: #D4B896;
+      --sage-200: #2a3528; --sage-400: #7FA87A; --peach-200: #3a2828; --peach-300: #5a3838; --lav-200: #2a2838;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Nunito', system-ui, sans-serif; color: var(--text);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% 0%, var(--bg-grad1), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 90% 10%, var(--bg-grad2), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 50% 100%, var(--bg-grad3), transparent 55%),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg) 40%, var(--cream-200) 100%);
+      min-height: 100vh; overflow-x: hidden;
+      padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      transition: background .3s ease, color .3s ease;
+    }
+    .font-display { font-family: 'Baloo 2', cursive; }
+    input, button, textarea { font-size: 16px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    .surface { background: var(--surface); border: 1.5px solid var(--border); backdrop-filter: blur(8px); }
+    .float-layer { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .float-bit { position: absolute; font-size: 1.25rem; opacity: .12; animation: floaty linear infinite; user-select: none; }
     @keyframes floaty { 0%{transform:translateY(0) rotate(0)} 50%{transform:translateY(-28px) rotate(8deg)} 100%{transform:translateY(0) rotate(0)} }
-    .enter { opacity:0; transform:translateY(22px); animation:riseIn .7s cubic-bezier(.22,1,.36,1) forwards; }
-    @keyframes riseIn { to{opacity:1;transform:translateY(0)} }
-    .breathe { animation:breathe 3.2s ease-in-out infinite; transform-origin:center bottom; }
+    .enter { opacity: 0; transform: translateY(22px); animation: riseIn .7s cubic-bezier(.22,1,.36,1) forwards; }
+    @keyframes riseIn { to { opacity: 1; transform: translateY(0) } }
+    .breathe { animation: breathe 3.2s ease-in-out infinite; transform-origin: center bottom; }
     @keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
-    .capy-bounce { animation:capyBounce .7s ease-in-out infinite; }
+    .capy-bounce { animation: capyBounce .7s ease-in-out infinite; }
     @keyframes capyBounce { 0%,100%{transform:translateY(0) rotate(-4deg)} 50%{transform:translateY(-12px) rotate(4deg)} }
-    .capy-wiggle { animation:capyWiggle .45s ease-in-out infinite; display:inline-block; }
+    .capy-wiggle { animation: capyWiggle .45s ease-in-out infinite; display: inline-block; }
     @keyframes capyWiggle { 0%,100%{transform:rotate(-10deg)} 50%{transform:rotate(10deg)} }
-    .pop-in { opacity:0; transform:scale(.82) translateY(12px); animation:popIn .45s cubic-bezier(.34,1.4,.64,1) forwards; }
-    @keyframes popIn { to{opacity:1;transform:scale(1) translateY(0)} }
-    .pulse-warn { animation:pulseWarn 1.8s ease-in-out infinite; }
+    .pop-in { opacity: 0; transform: scale(.82) translateY(12px); animation: popIn .45s cubic-bezier(.34,1.4,.64,1) forwards; }
+    @keyframes popIn { to { opacity: 1; transform: scale(1) translateY(0) } }
+    .pulse-warn { animation: pulseWarn 1.8s ease-in-out infinite; }
     @keyframes pulseWarn { 0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,.35)} 50%{box-shadow:0 0 0 8px rgba(251,191,36,0)} }
-    .pulse-ban { animation:pulseBan 1.6s ease-in-out infinite; }
+    .pulse-ban { animation: pulseBan 1.6s ease-in-out infinite; }
     @keyframes pulseBan { 0%,100%{box-shadow:0 0 0 0 rgba(232,160,160,.45)} 50%{box-shadow:0 0 0 8px rgba(232,160,160,0)} }
-    .bounce-safe { animation:bounceSafe 1.4s ease-in-out infinite; }
-    @keyframes bounceSafe { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
-    .result-card { transition:transform .25s ease,box-shadow .25s ease; }
-    .result-card:hover { transform:translateY(-4px); box-shadow:0 14px 36px rgba(139,111,78,.16); }
-    .slide-up { opacity:0; transform:translateY(24px); animation:slideUp .55s cubic-bezier(.22,1,.36,1) forwards; }
-    @keyframes slideUp { to{opacity:1;transform:translateY(0)} }
-    .fade-swap { animation:fadeSwap .35s ease forwards; }
-    @keyframes fadeSwap { from{opacity:0} to{opacity:1} }
-    .search-pill:focus-within { border-color:#C8A982; box-shadow:0 0 0 4px rgba(200,169,130,.22); }
-    .btn-cek { transition:transform .15s ease,box-shadow .2s ease,background .2s ease; }
-    .btn-cek:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 10px 24px rgba(184,149,106,.35); }
-    .btn-cek:active:not(:disabled) { transform:translateY(0) scale(.98); }
-    .btn-cek:disabled { opacity:.75; cursor:wait; }
-    .surface { background:rgba(255,251,245,.92); border:1.5px solid rgba(232,213,196,.9); backdrop-filter:blur(8px); }
-    .state-panel { display:none; }
-    .state-panel.is-active { display:block; }
-    .hist-chip { transition:transform .15s ease,background .15s ease; cursor:pointer; }
-    .hist-chip:hover { transform:translateY(-2px); background:#FFF8F0; }
-    .capy-head { transition:transform .25s ease; display:inline-block; }
-    .capy-head.look-right { transform:rotate(8deg) translateX(2px); }
-    .capy-head.look-left { transform:rotate(-8deg) translateX(-2px); }
-    .metric-bar { height:8px; border-radius:999px; background:#F5EDE0; overflow:hidden; }
-    .metric-fill { height:100%; border-radius:999px; transition:width .8s cubic-bezier(.22,1,.36,1); width:0; }
-    .tab-btn { transition:all .2s ease; }
-    .tab-btn.active { background:#C8A982; color:#fff; }
-    .layer-cell { transition:transform .15s ease; }
-    .layer-cell:hover { transform:scale(1.03); }
-    .recent-scroll::-webkit-scrollbar { height:6px; }
-    .recent-scroll::-webkit-scrollbar-thumb { background:#D4B896; border-radius:999px; }
-    .recover-card { transition:transform .15s ease,box-shadow .15s ease; cursor:pointer; }
-    .recover-card:hover { transform:translateY(-3px); box-shadow:0 10px 28px rgba(139,111,78,.12); }
-    .share-brand { display:none; }
-    .capturing .share-brand { display:flex !important; }
-    .capturing .no-capture { display:none !important; }
-    @media (max-width:640px) {
-      .float-bit { display:none; }
-      .layer-grid { grid-template-columns:1fr 1fr !important; }
-      .recent-chips { flex-wrap:nowrap; overflow-x:auto; }
+    .slide-up { opacity: 0; transform: translateY(24px); animation: slideUp .55s cubic-bezier(.22,1,.36,1) forwards; }
+    @keyframes slideUp { to { opacity: 1; transform: translateY(0) } }
+    .fade-swap { animation: fadeSwap .35s ease forwards; }
+    @keyframes fadeSwap { from { opacity: 0 } to { opacity: 1 } }
+    .search-pill:focus-within { border-color: var(--cocoa-400); box-shadow: 0 0 0 4px rgba(200,169,130,.22); }
+    .btn-cek { transition: transform .15s ease, box-shadow .2s ease, background .2s ease; }
+    .btn-cek:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(184,149,106,.35); }
+    .btn-cek:active:not(:disabled) { transform: translateY(0) scale(.98); }
+    .btn-cek:disabled { opacity: .75; cursor: wait; }
+    .state-panel { display: none; } .state-panel.is-active { display: block; }
+    .capy-head { transition: transform .25s ease; display: inline-block; }
+    .capy-head.look-right { transform: rotate(8deg) translateX(2px); }
+    .capy-head.look-left { transform: rotate(-8deg) translateX(-2px); }
+    .metric-bar { height: 8px; border-radius: 999px; background: var(--cream-200); overflow: hidden; }
+    .metric-fill { height: 100%; border-radius: 999px; transition: width .8s cubic-bezier(.22,1,.36,1); width: 0; }
+    .tab-btn { transition: all .2s ease; }
+    .tab-btn.active { background: var(--cocoa-400); color: #fff; }
+    .layer-cell { transition: transform .15s ease; } .layer-cell:hover { transform: scale(1.03); }
+    .recent-scroll::-webkit-scrollbar { height: 6px; }
+    .recent-scroll::-webkit-scrollbar-thumb { background: var(--cocoa-400); border-radius: 999px; }
+    .recover-card { transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
+    .recover-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(139,111,78,.12); }
+    .share-brand { display: none; } .capturing .share-brand { display: flex !important; } .capturing .no-capture { display: none !important; }
+    .ringkasan-body { max-height: 0; overflow: hidden; transition: max-height .4s ease; }
+    .ringkasan-body.open { max-height: 600px; }
+    .carousel-track { display: flex; transition: transform .4s cubic-bezier(.22,1,.36,1); }
+    .carousel-slide { min-width: 100%; padding: 0 4px; }
+    .tutu-float { animation: tutuFloat 3s ease-in-out infinite; }
+    @keyframes tutuFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .ghost-hide { animation: ghostFade .5s ease forwards; }
+    @keyframes ghostFade { to { opacity: 0; transform: scale(.5); pointer-events: none; } }
+    .modal-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(61,50,41,.5); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.open { display: flex; }
+    .modal-box { width: min(560px, 100%); max-height: 85vh; overflow: auto; }
+    .deep-badge { animation: deepPulse 2s ease-in-out infinite; }
+    @keyframes deepPulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+    @media (max-width: 640px) {
+      .float-bit { display: none; }
+      .layer-grid { grid-template-columns: 1fr 1fr !important; }
+      .recent-chips { flex-wrap: nowrap; overflow-x: auto; }
+      .nav-bar { flex-wrap: wrap; gap: 4px; }
     }
   </style>
 </head>
 <body class="font-body">
   <div class="float-layer" id="float-layer" aria-hidden="true"></div>
 
-  <div class="page-wrap relative z-10 max-w-[720px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
-
-    <!-- Header -->
-    <header class="text-center mb-6 enter" style="animation-delay:.05s">
-      <div class="inline-flex items-center justify-center gap-3 mb-2">
-        <span id="header-capy" class="capy-head text-5xl sm:text-6xl select-none">🦫</span>
+  <!-- Top nav -->
+  <nav class="surface sticky top-0 z-50 px-4 py-2.5 border-b" style="border-color:var(--border)">
+    <div class="nav-bar max-w-[720px] mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <button id="nav-home" type="button" class="text-lg" title="Beranda">🦫</button>
+        <span class="font-display text-lg font-bold" style="color:var(--cocoa-700)">KeGhost</span>
+        <span id="nav-username" class="text-xs font-bold text-ink-500 hidden"></span>
       </div>
-      <h1 class="font-display text-4xl sm:text-5xl font-bold text-cocoa-700 tracking-tight">KeGhost</h1>
-      <p class="mt-1 text-ink-500 text-base sm:text-lg font-semibold">Cek shadowban X — 8 lapis audit 🦫</p>
-    </header>
+      <div class="flex items-center gap-2">
+        <button id="theme-toggle" type="button" class="text-sm px-2 py-1 rounded-full surface" title="Ganti tema">🌙</button>
+        <button id="lang-id" type="button" class="text-xs font-extrabold px-2 py-1 rounded-full bg-cocoa-400 text-white">ID</button>
+        <button id="lang-en" type="button" class="text-xs font-extrabold px-2 py-1 rounded-full surface">EN</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="relative z-10 max-w-[720px] mx-auto px-4 sm:px-5 py-6 sm:py-8">
+
+    <!-- Sub header -->
+    <div class="text-center mb-5 enter" style="animation-delay:.05s">
+      <h1 class="font-display text-3xl sm:text-4xl font-bold tracking-tight" style="color:var(--cocoa-700)">
+        <span data-i18n="hub_title">Shadowban Hub</span>
+      </h1>
+      <p class="mt-1 text-sm font-semibold" style="color:var(--text-muted)" data-i18n="hub_sub">Cek shadowban X — 8 lapis audit gratis</p>
+    </div>
 
     <!-- Search -->
-    <section class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-5 enter" style="animation-delay:.15s">
+    <section class="surface rounded-[28px] shadow-soft p-4 sm:p-5 mb-4 enter" style="animation-delay:.1s">
       <div class="flex flex-col sm:flex-row gap-3">
-        <div class="search-pill flex-1 flex items-center gap-2 bg-cream-100 border-[1.5px] border-cream-300 rounded-full px-4 py-1.5 transition-all">
-          <span class="text-ink-500 font-bold text-lg">@</span>
+        <div class="search-pill flex-1 flex items-center gap-2 rounded-full px-4 py-1.5 transition-all" style="background:var(--cream-100);border:1.5px solid var(--cream-300)">
+          <span class="font-bold text-lg" style="color:var(--text-muted)">@</span>
           <input id="username" type="text" autocomplete="off" spellcheck="false" placeholder="username X kamu"
-            class="w-full bg-transparent py-2.5 text-base sm:text-lg font-semibold text-ink-900 placeholder:text-ink-500/40 outline-none" />
+            class="w-full bg-transparent py-2.5 text-base sm:text-lg font-semibold outline-none" style="color:var(--text)" data-i18n-ph="ph_username" />
         </div>
-        <button id="btn-cek" type="button" class="btn-cek shrink-0 inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 hover:bg-cocoa-500 text-white font-extrabold px-6 py-3.5 shadow-pill" style="min-height:48px">
+        <button id="btn-cek" type="button" class="btn-cek shrink-0 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-6 py-3.5 shadow-pill" style="background:var(--cocoa-400);min-height:48px">
           <span id="btn-capy" class="text-xl leading-none">🦫</span>
-          <span id="btn-label">Mulai Scan</span>
+          <span id="btn-label" data-i18n="btn_scan">Mulai Scan</span>
         </button>
       </div>
-      <p class="mt-2.5 text-xs text-ink-500/70 font-medium">Tanpa @ juga boleh. Enter = langsung scan ✨</p>
+      <p class="mt-2 text-xs font-medium" style="color:var(--text-muted)" data-i18n="search_hint">Tanpa @ juga boleh. Enter = langsung scan ✨</p>
     </section>
 
+    <!-- Filter tabs (visible after scan) -->
+    <div id="filter-tabs" class="hidden flex gap-2 mb-4 enter" style="animation-delay:.15s">
+      <button class="tab-btn active text-xs font-extrabold px-3 py-1.5 rounded-full" data-filter="all" style="background:var(--cream-200);color:var(--text-muted)" data-i18n="tab_all">Semua</button>
+      <button class="tab-btn text-xs font-extrabold px-3 py-1.5 rounded-full" data-filter="ban" style="background:var(--cream-200);color:var(--text-muted)" data-i18n="tab_ban">Ban</button>
+      <button class="tab-btn text-xs font-extrabold px-3 py-1.5 rounded-full" data-filter="mod" style="background:var(--cream-200);color:var(--text-muted)" data-i18n="tab_mod">Mod</button>
+      <button class="tab-btn text-xs font-extrabold px-3 py-1.5 rounded-full" data-filter="clean" style="background:var(--cream-200);color:var(--text-muted)" data-i18n="tab_clean">Clean</button>
+    </div>
+
     <!-- Recently scanned -->
-    <section class="mb-5 enter" style="animation-delay:.2s">
+    <section class="mb-4 enter" style="animation-delay:.15s">
       <div class="flex items-center gap-2 mb-2">
         <span class="text-sm">🔍</span>
-        <h3 class="font-display text-sm text-cocoa-700 font-bold">Baru di-scan</h3>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sage-200 text-sage-500">LIVE</span>
+        <h3 class="font-display text-sm font-bold" style="color:var(--cocoa-700)" data-i18n="recent_title">Baru di-scan</h3>
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" style="background:var(--sage-200);color:var(--sage-400)">LIVE</span>
       </div>
       <div id="recent-list" class="recent-chips recent-scroll flex gap-2 overflow-x-auto pb-1 min-h-[52px] items-center">
-        <span class="text-sm text-ink-500/50 font-medium">Belum ada…</span>
+        <span class="text-sm font-medium" style="color:var(--text-muted);opacity:.5" data-i18n="recent_empty">Belum ada…</span>
       </div>
     </section>
 
     <!-- Main panels -->
-    <section class="mb-5 enter" style="animation-delay:.25s">
+    <section class="mb-4 enter" style="animation-delay:.2s">
 
       <!-- Empty -->
       <div id="state-empty" class="state-panel is-active surface rounded-[28px] shadow-soft px-6 py-12 text-center fade-swap">
         <div class="breathe text-7xl sm:text-8xl mb-4 select-none">🦫</div>
-        <h2 class="font-display text-2xl text-cocoa-700 font-bold">Masukin username dulu yuk</h2>
-        <p class="mt-2 text-ink-500 font-medium max-w-sm mx-auto">Capybara bantu cek 8 lapis shadowban. Profil, search, suggest, QRT, spam, rank, post, index — semua sekaligus 🍊</p>
+        <h2 class="font-display text-2xl font-bold" style="color:var(--cocoa-700)" data-i18n="empty_title">Masukin username dulu yuk</h2>
+        <p class="mt-2 font-medium max-w-sm mx-auto" style="color:var(--text-muted)" data-i18n="empty_sub">8 lapis audit: Profil, Search, Suggest, QRT, Spam, Rank, Post, Index — semua sekaligus 🍊</p>
       </div>
 
       <!-- Loading -->
       <div id="state-loading" class="state-panel surface rounded-[28px] shadow-soft px-6 py-14 text-center fade-swap">
         <div class="capy-bounce text-7xl mb-4 select-none">🦫</div>
-        <h2 class="font-display text-2xl text-cocoa-700 font-bold">Capybara lagi nyari jejak…</h2>
-        <p class="mt-2 text-ink-500 font-medium">8 lapis audit sedang jalan ✨</p>
+        <h2 class="font-display text-2xl font-bold" style="color:var(--cocoa-700)" data-i18n="loading_title">Capybara lagi nyari jejak…</h2>
+        <p class="mt-2 font-medium" style="color:var(--text-muted)" data-i18n="loading_sub">8 lapis audit sedang jalan ✨</p>
         <div class="mt-6 flex justify-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-cocoa-400 animate-bounce" style="animation-delay:0ms"></span>
-          <span class="w-2.5 h-2.5 rounded-full bg-sage-400 animate-bounce" style="animation-delay:120ms"></span>
-          <span class="w-2.5 h-2.5 rounded-full bg-peach-400 animate-bounce" style="animation-delay:240ms"></span>
+          <span class="w-2.5 h-2.5 rounded-full animate-bounce" style="background:var(--cocoa-400);animation-delay:0ms"></span>
+          <span class="w-2.5 h-2.5 rounded-full animate-bounce" style="background:var(--sage-400);animation-delay:120ms"></span>
+          <span class="w-2.5 h-2.5 rounded-full animate-bounce" style="background:var(--peach-300);animation-delay:240ms"></span>
         </div>
       </div>
 
       <!-- Error -->
       <div id="state-error" class="state-panel surface rounded-[28px] shadow-soft px-6 py-12 text-center fade-swap">
         <div class="capy-wiggle text-7xl mb-4 select-none">🦫</div>
-        <h2 class="font-display text-2xl text-peach-500 font-bold">Yah capybara-nya bingung</h2>
-        <p id="error-msg" class="mt-2 text-ink-500 font-medium max-w-sm mx-auto">Coba lagi yuk 🦫</p>
-        <button type="button" onclick="setState('empty')" class="mt-5 inline-flex items-center gap-2 rounded-full bg-peach-300 hover:bg-peach-400 text-ink-900 font-extrabold px-5 py-2.5 transition">Coba lagi</button>
+        <h2 class="font-display text-2xl font-bold" style="color:var(--peach-400)" data-i18n="error_title">Yah capybara-nya bingung</h2>
+        <p id="error-msg" class="mt-2 font-medium max-w-sm mx-auto" style="color:var(--text-muted)">Coba lagi yuk 🦫</p>
+        <button type="button" onclick="setState('empty')" class="mt-5 inline-flex items-center gap-2 rounded-full font-extrabold px-5 py-2.5 transition" style="background:var(--peach-300);color:#3D3229" data-i18n="btn_retry">Coba lagi</button>
       </div>
 
       <!-- Results -->
       <div id="state-results" class="state-panel fade-swap">
-        <div id="share-card" class="space-y-4">
-          <!-- brand bar for screenshot -->
+        <div id="share-card" class="space-y-3">
+          <!-- brand for screenshot -->
           <div class="share-brand items-center justify-between px-1 mb-1">
             <div class="flex items-center gap-2">
               <span style="font-size:1.4rem">🦫</span>
               <div>
-                <div class="font-display text-lg font-bold text-cocoa-700 leading-none">KeGhost</div>
-                <div class="text-[11px] font-bold text-ink-500/70">8 lapis shadowban audit</div>
+                <div class="font-display text-lg font-bold leading-none" style="color:var(--cocoa-700)">KeGhost</div>
+                <div class="text-[11px] font-bold" style="color:var(--text-muted)">8 lapis shadowban audit</div>
               </div>
             </div>
-            <div class="text-[11px] font-extrabold text-cocoa-500">by PICA</div>
+            <div class="text-[11px] font-extrabold" style="color:var(--cocoa-400)">by PICA</div>
           </div>
 
-          <!-- Profile -->
-          <div id="profile-card" class="surface rounded-[22px] shadow-soft p-4 sm:p-5 hidden">
-            <div class="flex items-center gap-3 sm:gap-4">
-              <img id="profile-avatar" src="" alt="" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-[3px] border-cream-300 shadow-card bg-cream-200" crossorigin="anonymous" />
+          <!-- Profile card -->
+          <div id="profile-card" class="surface rounded-[22px] shadow-soft p-4 hidden">
+            <div class="flex items-center gap-3">
+              <img id="profile-avatar" src="" alt="" class="w-14 h-14 rounded-full object-cover border-[3px] shadow-card" style="border-color:var(--cream-300);background:var(--cream-200)" crossorigin="anonymous" />
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <div id="profile-name" class="font-display text-lg sm:text-xl text-cocoa-700 font-bold truncate"></div>
-                  <span id="profile-verified" class="hidden text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sage-200 text-sage-500">✓ verified</span>
-                  <span id="profile-protected" class="hidden text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-peach-200 text-peach-500">protected</span>
+                  <div id="profile-name" class="font-display text-lg font-bold truncate" style="color:var(--cocoa-700)"></div>
+                  <span id="profile-verified" class="hidden text-[10px] font-extrabold px-2 py-0.5 rounded-full" style="background:var(--sage-200);color:var(--sage-400)">✓ verified</span>
+                  <span id="profile-protected" class="hidden text-[10px] font-extrabold px-2 py-0.5 rounded-full" style="background:var(--peach-200);color:var(--peach-400)">protected</span>
                 </div>
-                <div id="profile-handle" class="text-sm font-bold text-ink-500/80"></div>
-                <div class="mt-1.5 flex flex-wrap gap-3 text-xs font-extrabold text-cocoa-700">
-                  <span><span id="profile-followers">0</span> <span class="font-semibold text-ink-500/70">followers</span></span>
-                  <span><span id="profile-following">0</span> <span class="font-semibold text-ink-500/70">following</span></span>
-                  <span><span id="profile-tweets">0</span> <span class="font-semibold text-ink-500/70">posts</span></span>
+                <div id="profile-handle" class="text-sm font-bold" style="color:var(--text-muted)"></div>
+                <div class="mt-1.5 flex flex-wrap gap-3 text-xs font-extrabold" style="color:var(--cocoa-700)">
+                  <span><span id="profile-followers">0</span> <span class="font-semibold" style="color:var(--text-muted)" data-i18n="followers">followers</span></span>
+                  <span><span id="profile-following">0</span> <span class="font-semibold" style="color:var(--text-muted)" data-i18n="following">following</span></span>
+                  <span><span id="profile-tweets">0</span> <span class="font-semibold" style="color:var(--text-muted)" data-i18n="posts">posts</span></span>
                 </div>
               </div>
-              <button id="btn-resync" type="button" class="shrink-0 text-xs font-extrabold px-3 py-2 rounded-full bg-cream-200 hover:bg-cream-300 text-cocoa-700 transition">↻ Resync</button>
+              <button id="btn-resync" type="button" class="shrink-0 text-xs font-extrabold px-3 py-2 rounded-full transition" style="background:var(--cream-200);color:var(--cocoa-700)" data-i18n="btn_resync">↻ Resync</button>
             </div>
           </div>
 
-          <!-- Overall + 8 layer grid -->
-          <div class="surface rounded-[22px] shadow-soft p-4 sm:p-5">
-            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <!-- X-Moots Direktori -->
+          <div id="moots-section" class="surface rounded-[22px] shadow-soft p-4 hidden">
+            <div class="flex items-center justify-between">
               <div>
-                <div class="text-[11px] font-bold uppercase tracking-wide text-ink-500/70">Audit Result</div>
-                <div id="result-username" class="font-display text-2xl sm:text-3xl text-cocoa-700 font-bold mt-0.5"></div>
-                <div class="text-xs text-ink-500/70 mt-1 font-medium" id="check-time"></div>
+                <div class="font-display text-sm font-bold" style="color:var(--cocoa-700)" data-i18n="moots_title">X-Moots Direktori</div>
+                <div class="text-xs font-medium" style="color:var(--text-muted)" data-i18n="moots_sub">Daftar akun yang pernah di-scan komunitas</div>
               </div>
-              <div id="overall-badge" class="inline-flex items-center gap-2 rounded-full px-4 py-2 font-extrabold text-sm shadow-card"></div>
+              <button id="btn-moots" type="button" class="text-xs font-extrabold px-3 py-1.5 rounded-full transition" style="background:var(--cocoa-400);color:#fff" data-i18n="btn_view">Lihat</button>
+            </div>
+          </div>
+
+          <!-- Section 01: Cek Shadowban -->
+          <div class="surface rounded-[22px] shadow-soft p-4 sm:p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs font-extrabold px-2 py-0.5 rounded-full" style="background:var(--cocoa-400);color:#fff">01</span>
+              <h2 class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="sec01_title">Cek shadowban</h2>
             </div>
 
-            <!-- Filter tabs -->
-            <div class="flex gap-2 mb-3 no-capture">
-              <button class="tab-btn active text-xs font-extrabold px-3 py-1.5 rounded-full bg-cream-200 text-ink-500" data-filter="all">Semua</button>
-              <button class="tab-btn text-xs font-extrabold px-3 py-1.5 rounded-full bg-cream-200 text-ink-500" data-filter="banned">Ban</button>
-              <button class="tab-btn text-xs font-extrabold px-3 py-1.5 rounded-full bg-cream-200 text-ink-500" data-filter="clean">Clean</button>
+            <!-- PLAYBOOK button -->
+            <button id="btn-playbook" type="button" class="w-full mb-3 text-sm font-extrabold px-4 py-2.5 rounded-full transition flex items-center justify-center gap-2 no-capture" style="background:var(--lav-200);color:var(--lav-400)" data-i18n="btn_playbook">
+              📋 <span data-i18n="btn_playbook_text">Buka playbook pemulihan akun</span>
+            </button>
+
+            <!-- RINGKASAN accordion -->
+            <div class="rounded-2xl p-3.5 mb-3 no-capture" style="background:var(--cream-100);border:1.5px solid var(--border)">
+              <button id="btn-ringkasan" type="button" class="w-full flex items-center justify-between text-left">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-extrabold" data-i18n="ringkasan">RINGKASAN</span>
+                  <span id="ringkasan-time" class="text-[11px] font-bold" style="color:var(--text-muted)"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="ringkasan-status" class="text-sm font-extrabold"></span>
+                  <span class="text-xs" style="color:var(--text-muted)">▼</span>
+                </div>
+              </button>
+              <div id="ringkasan-body" class="ringkasan-body mt-0">
+                <div id="ringkasan-layers" class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3"></div>
+              </div>
             </div>
 
-            <!-- 8 layer grid -->
+            <!-- Grok moderation hint -->
+            <div id="grok-hint" class="rounded-2xl p-3 mb-3 no-capture hidden" style="background:var(--lav-200);border:1.5px solid var(--lav-400)">
+              <div class="flex items-start gap-2">
+                <span class="text-sm">🤖</span>
+                <div class="flex-1">
+                  <p class="text-xs font-medium" style="color:var(--text-muted)" data-i18n="grok_hint">Jangan-jangan ada postingan kamu yang bermasalah di moderasi? Cek lewat tab Mod.</p>
+                </div>
+                <button type="button" onclick="setFilter('mod')" class="text-xs font-extrabold px-2 py-1 rounded-full" style="background:var(--lav-400);color:#fff" data-i18n="btn_mod_tab">Buka tab Mod</button>
+                <button type="button" onclick="document.getElementById('grok-hint').classList.add('hidden')" class="text-sm" style="color:var(--text-muted)">×</button>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex flex-wrap gap-2 no-capture">
+              <button id="btn-audit-ulang" type="button" class="text-xs font-extrabold px-3 py-2 rounded-full transition flex items-center gap-1.5" style="background:var(--cream-200);color:var(--cocoa-700)">
+                <span>🔄</span><span data-i18n="btn_audit">Audit ulang</span>
+              </button>
+              <button id="btn-deep-scan" type="button" class="text-xs font-extrabold px-3 py-2 rounded-full transition flex items-center gap-1.5" style="background:var(--cream-200);color:var(--cocoa-700)">
+                <span>🔬</span><span data-i18n="btn_deep">Deep scan</span>
+              </button>
+              <button id="btn-memorizer" type="button" class="text-xs font-extrabold px-3 py-2 rounded-full transition flex items-center gap-1.5" style="background:var(--cream-200);color:var(--cocoa-700)">
+                <span>💾</span><span data-i18n="btn_memorizer">Memorizer</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 8 layer grid -->
+          <div class="surface rounded-[22px] shadow-soft p-4">
             <div id="layer-grid" class="layer-grid grid grid-cols-2 sm:grid-cols-4 gap-2.5"></div>
           </div>
 
-          <!-- Recover Suite -->
-          <div id="recover-section" class="surface rounded-[22px] shadow-soft p-4 sm:p-5 hidden">
+          <!-- Section 02: Recover Suite -->
+          <div id="recover-section" class="surface rounded-[22px] shadow-soft p-4 hidden">
             <div class="flex items-center gap-2 mb-3">
-              <span class="text-xl">🦫</span>
-              <h3 class="font-display text-lg text-cocoa-700 font-bold">Recover Suite</h3>
+              <span class="text-xs font-extrabold px-2 py-0.5 rounded-full" style="background:var(--cocoa-400);color:#fff">02</span>
+              <h2 class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="sec02_title">Recover Suite</h2>
             </div>
-            <p class="text-xs text-ink-500 font-medium mb-3">Ketuk situasi di bawah — capybara kasih langkah perbaikan</p>
+            <p class="text-xs font-medium mb-3" style="color:var(--text-muted)" data-i18n="sec02_sub">Ketuk situasi di bawah — capybara kasih langkah perbaikan</p>
             <div id="recover-cards" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+            <button id="btn-recover-open" type="button" class="w-full mt-3 text-sm font-extrabold px-4 py-2.5 rounded-full transition" style="background:var(--sage-200);color:var(--sage-400)" data-i18n="btn_recover_open">Buka Recover Suite</button>
+          </div>
+
+          <!-- Section 03: Eksplorasi -->
+          <div class="surface rounded-[22px] shadow-soft p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-xs font-extrabold px-2 py-0.5 rounded-full" style="background:var(--cocoa-400);color:#fff">03</span>
+              <h2 class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="sec03_title">Eksplorasi KeGhost</h2>
+            </div>
+            <div class="overflow-hidden">
+              <div id="carousel-track" class="carousel-track"></div>
+            </div>
+            <div class="flex items-center justify-center gap-2 mt-3">
+              <button id="carousel-prev" type="button" class="text-sm px-2 py-1 rounded-full surface">←</button>
+              <div id="carousel-dots" class="flex gap-1.5"></div>
+              <button id="carousel-next" type="button" class="text-sm px-2 py-1 rounded-full surface">→</button>
+            </div>
           </div>
 
           <!-- Share brand footer for screenshot -->
           <div class="share-brand items-center justify-between px-2 pt-1">
-            <div class="text-xs font-bold text-ink-500/70">Made with 🦫 by PICA</div>
-            <div class="text-xs font-extrabold text-cocoa-500">keghost.vercel.app</div>
+            <div class="text-xs font-bold" style="color:var(--text-muted)">Made with 🦫 by PICA</div>
+            <div class="text-xs font-extrabold" style="color:var(--cocoa-400)">keghost.vercel.app</div>
           </div>
         </div><!-- /share-card -->
 
         <!-- Share actions -->
-        <div class="no-capture surface rounded-[22px] shadow-soft p-4 mt-4">
+        <div class="no-capture surface rounded-[22px] shadow-soft p-4 mt-3">
           <div class="flex flex-col sm:flex-row gap-2.5">
-            <button id="btn-share-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[#111] text-white font-extrabold px-5 py-3 shadow-pill" style="min-height:48px">
-              <span>𝕏</span><span>Share ke X</span>
+            <button id="btn-share-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3 shadow-pill" style="background:#111;min-height:48px">
+              <span>𝕏</span><span data-i18n="btn_share">Share ke X</span>
             </button>
-            <button id="btn-download-img" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 hover:bg-cocoa-500 text-white font-extrabold px-5 py-3 shadow-pill" style="min-height:48px">
-              <span>🖼️</span><span>Download gambar</span>
+            <button id="btn-download-img" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3 shadow-pill" style="background:var(--cocoa-400);min-height:48px">
+              <span>🖼️</span><span data-i18n="btn_download">Download gambar</span>
             </button>
           </div>
-          <p id="share-status" class="mt-2 text-xs font-bold text-ink-500/70 min-h-[1rem]"></p>
+          <p id="share-status" class="mt-2 text-xs font-bold min-h-[1rem]" style="color:var(--text-muted)"></p>
         </div>
       </div>
     </section>
 
+    <!-- Tutu announcement -->
+    <div id="tutu-banner" class="surface rounded-[22px] shadow-soft p-4 mt-4 enter flex items-center gap-3" style="animation-delay:.3s">
+      <div class="tutu-float text-3xl select-none">👻</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-display text-sm font-bold" style="color:var(--cocoa-700)">Tutu bilang: Kabar!</div>
+        <p class="text-xs font-medium mt-0.5" style="color:var(--text-muted)" data-i18n="tutu_msg">KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫</p>
+      </div>
+      <button type="button" onclick="document.getElementById('tutu-banner').classList.add('ghost-hide')" class="text-sm px-2 py-1 rounded-full surface" data-i18n="btn_hide_ghost">×</button>
+    </div>
+
     <!-- Footer -->
-    <footer class="text-center pb-6 enter" style="animation-delay:.35s">
-      <p class="text-sm font-semibold text-ink-500/70">Made by
-        <a href="https://x.com/peachymoo_" target="_blank" rel="noopener noreferrer" class="text-cocoa-700 hover:text-peach-500 font-extrabold underline decoration-cocoa-300 underline-offset-2 transition">PICA</a>
+    <footer class="text-center pb-6 pt-4 enter" style="animation-delay:.35s">
+      <p class="text-sm font-semibold" style="color:var(--text-muted)">Made by
+        <a href="https://x.com/peachymoo_" target="_blank" rel="noopener noreferrer" class="font-extrabold underline transition" style="color:var(--cocoa-700)">PICA</a>
       </p>
-      <p class="text-xs text-ink-500/50 mt-1">KeGhost · 8 lapis shadowban checker 🦫</p>
+      <p class="text-xs mt-1" style="color:var(--text-muted);opacity:.5">KeGhost · 8 lapis shadowban checker 🦫</p>
     </footer>
   </div>
 
-  <!-- Share modal -->
-  <div id="share-modal" class="fixed inset-0 z-80 bg-[rgba(61,50,41,.45)] hidden items-end justify-center p-4" style="padding-bottom:max(16px,env(safe-area-inset-bottom))">
-    <div class="w-full max-w-[520px] bg-[#FFFBF5] rounded-3xl border-[1.5px] border-cream-300 shadow-2xl p-4 max-h-[90vh] overflow-auto">
+  <!-- Playbook modal -->
+  <div id="playbook-modal" class="modal-overlay">
+    <div class="modal-box surface rounded-3xl shadow-2xl p-5">
       <div class="flex items-center justify-between mb-3">
-        <div class="font-display text-lg font-bold text-cocoa-700">Preview report</div>
-        <button type="button" id="btn-close-modal" class="text-sm font-extrabold text-ink-500 px-3 py-1 rounded-full bg-cream-200">Tutup</button>
+        <div class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="playbook_title">Playbook Pemulihan Akun</div>
+        <button type="button" onclick="closeModal('playbook-modal')" class="text-sm font-extrabold px-3 py-1 rounded-full surface" data-i18n="btn_close">Tutup</button>
       </div>
-      <img id="share-preview-img" alt="KeGhost report" class="w-full rounded-2xl border border-cream-300 block" />
+      <div id="playbook-content" class="space-y-3"></div>
+    </div>
+  </div>
+
+  <!-- Memorizer modal -->
+  <div id="memorizer-modal" class="modal-overlay">
+    <div class="modal-box surface rounded-3xl shadow-2xl p-5">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-display text-lg font-bold" style="color:var(--cocoa-700)">💾 Memorizer</div>
+        <button type="button" onclick="closeModal('memorizer-modal')" class="text-sm font-extrabold px-3 py-1 rounded-full surface" data-i18n="btn_close">Tutup</button>
+      </div>
+      <p class="text-xs font-medium mb-3" style="color:var(--text-muted)" data-i18n="memorizer_sub">Hasil scan tersimpan di browser kamu. Klik untuk lihat ulang.</p>
+      <div id="memorizer-list" class="space-y-2"></div>
+      <button id="btn-mem-clear" type="button" class="w-full mt-3 text-xs font-extrabold px-3 py-2 rounded-full transition" style="background:var(--peach-200);color:var(--peach-400)" data-i18n="btn_mem_clear">Hapus semua</button>
+    </div>
+  </div>
+
+  <!-- Share modal -->
+  <div id="share-modal" class="modal-overlay" style="align-items:flex-end">
+    <div class="modal-box surface rounded-3xl shadow-2xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-display text-lg font-bold" style="color:var(--cocoa-700)">Preview report</div>
+        <button type="button" id="btn-close-share" class="text-sm font-extrabold px-3 py-1 rounded-full surface" data-i18n="btn_close">Tutup</button>
+      </div>
+      <img id="share-preview-img" alt="" class="w-full rounded-2xl block" style="border:1px solid var(--border)" />
       <div class="flex flex-col sm:flex-row gap-2.5 mt-3">
-        <button id="btn-share-preview-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-[#111] text-white font-extrabold px-5 py-3">Share ke X</button>
-        <button id="btn-share-preview-dl" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 text-white font-extrabold px-5 py-3">Download</button>
+        <button id="btn-share-preview-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3" style="background:#111">Share ke X</button>
+        <button id="btn-share-preview-dl" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3" style="background:var(--cocoa-400)">Download</button>
       </div>
     </div>
   </div>
 
   <script>
+    // === I18N ===
+    const I18N = {
+      id: {
+        hub_title:'Shadowban Hub', hub_sub:'Cek shadowban X — 8 lapis audit gratis',
+        btn_scan:'Mulai Scan', search_hint:'Tanpa @ juga boleh. Enter = langsung scan ✨',
+        tab_all:'Semua', tab_ban:'Ban', tab_mod:'Mod', tab_clean:'Clean',
+        recent_title:'Baru di-scan', recent_empty:'Belum ada…',
+        empty_title:'Masukin username dulu yuk', empty_sub:'8 lapis audit: Profil, Search, Suggest, QRT, Spam, Rank, Post, Index — semua sekaligus 🍊',
+        loading_title:'Capybara lagi nyari jejak…', loading_sub:'8 lapis audit sedang jalan ✨',
+        error_title:'Yah capybara-nya bingung', btn_retry:'Coba lagi',
+        followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
+        moots_title:'X-Moots Direktori', moots_sub:'Daftar akun yang pernah di-scan komunitas', btn_view:'Lihat',
+        sec01_title:'Cek shadowban', btn_playbook_text:'Buka playbook pemulihan akun', ringkasan:'RINGKASAN',
+        grok_hint:'Jangan-jangan ada postingan kamu yang bermasalah di moderasi? Cek lewat tab Mod.', btn_mod_tab:'Buka tab Mod',
+        btn_audit:'Audit ulang', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
+        sec02_title:'Recover Suite', sec02_sub:'Ketuk situasi di bawah — capybara kasih langkah perbaikan', btn_recover_open:'Buka Recover Suite',
+        sec03_title:'Eksplorasi KeGhost', btn_share:'Share ke X', btn_download:'Download gambar',
+        tutu_msg:'KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫', btn_hide_ghost:'×',
+        playbook_title:'Playbook Pemulihan Akun', btn_close:'Tutup',
+        memorizer_sub:'Hasil scan tersimpan di browser kamu. Klik untuk lihat ulang.', btn_mem_clear:'Hapus semua',
+        ph_username:'username X kamu'
+      },
+      en: {
+        hub_title:'Shadowban Hub', hub_sub:'Check X shadowban — 8 layer audit free',
+        btn_scan:'Start Scan', search_hint:'No @ needed. Enter = instant scan ✨',
+        tab_all:'All', tab_ban:'Ban', tab_mod:'Mod', tab_clean:'Clean',
+        recent_title:'Recently scanned', recent_empty:'None yet…',
+        empty_title:'Enter a username first', empty_sub:'8 layer audit: Profile, Search, Suggest, QRT, Spam, Rank, Post, Index — all at once 🍊',
+        loading_title:'Capybara is on the trail…', loading_sub:'8 layer audit in progress ✨',
+        error_title:'Oops capybara is confused', btn_retry:'Try again',
+        followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
+        moots_title:'X-Moots Directory', moots_sub:'Accounts scanned by the community', btn_view:'View',
+        sec01_title:'Shadowban check', btn_playbook_text:'Open account recovery playbook', ringkasan:'SUMMARY',
+        grok_hint:'Maybe your posts have moderation issues? Check via Mod tab.', btn_mod_tab:'Open Mod tab',
+        btn_audit:'Re-audit', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
+        sec02_title:'Recover Suite', sec02_sub:'Tap a situation below — capybara gives recovery steps', btn_recover_open:'Open Recover Suite',
+        sec03_title:'Explore KeGhost', btn_share:'Share to X', btn_download:'Download image',
+        tutu_msg:'KeGhost free 8 layer audit. Scan as much as you want! 🦫', btn_hide_ghost:'×',
+        playbook_title:'Account Recovery Playbook', btn_close:'Close',
+        memorizer_sub:'Scan results saved in your browser. Click to view again.', btn_mem_clear:'Clear all',
+        ph_username:'your X username'
+      }
+    };
+    let currentLang = 'id';
+    function applyI18n() {
+      const t = I18N[currentLang];
+      document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.dataset.i18n; if (t[k]) el.textContent = t[k]; });
+      document.querySelectorAll('[data-i18n-ph]').forEach(el => { const k = el.dataset.i18nPh; if (t[k]) el.placeholder = t[k]; });
+    }
+
+    // === DATA ===
     const LAYER_ICONS = { PROFILE:'👤', SEARCH:'🔎', SUGGEST:'💡', QRT:'🔁', SPAM:'🚫', RANK:'📊', POST:'📝', INDEX:'🗂️' };
+    const DEEP_LAYERS = ['SPAM','RANK','POST']; // "Data terbatas (opsional deep)" layers
     const statusMeta = {
-      safe: { label:'Clean', face:'✅', cell:'bg-sage-200/60 border-sage-300 text-sage-500', badge:'bg-sage-300 text-ink-900 bounce-safe', overall:'bg-sage-300 text-ink-900', overallText:'Safe ✨' },
-      warning: { label:'Waspada', face:'⚠️', cell:'bg-amber-50 border-amber-200 text-amber-700', badge:'bg-amber-200 text-amber-900 pulse-warn', overall:'bg-amber-200 text-amber-900 pulse-warn', overallText:'Agak shady 🤔' },
-      banned: { label:'Banned', face:'❌', cell:'bg-peach-200/60 border-peach-300 text-peach-500', badge:'bg-peach-300 text-ink-900 pulse-ban', overall:'bg-peach-300 text-ink-900 pulse-ban', overallText:'Ke-ghost 😢' }
+      safe: { label:'Clean', face:'✅', cell:'', badge:'', overall:'', overallText:'Safe ✨' },
+      warning: { label:'Waspada', face:'⚠️', cell:'', badge:'', overall:'', overallText:'Agak shady 🤔' },
+      banned: { label:'Banned', face:'❌', cell:'', badge:'', overall:'', overallText:'Ke-ghost 😢' }
     };
     const recoverMap = {
-      'SEARCH': { title:'Search hilang', steps:['Kurangi posting spam','Hindari kata sensitif','Post natural 3-7 hari','Audit ulang setelah 48h'] },
-      'SUGGEST': { title:'Suggest/typeahead blocked', steps:['Kurangi aktivitas berlebih','Jangan follow/unfollow massal','Istirahat 24-48 jam','Audit ulang'] },
-      'QRT': { title:'Quote tweet limited', steps:['Hindari konten kontroversial','Jangan quote spam','Post original 3 hari','Cek ulang'] },
-      'SPAM': { title:'Spam flag', steps:['Hapus post berulang','Kurangi link berlebih','Stop mention massal','Post natural 1 minggu'] },
-      'RANK': { title:'Reach turun', steps:['Post konsisten quality','Engage organik','Hindari bot-like pattern','Audit ulang 7 hari'] },
-      'POST': { title:'Post tidak indexable', steps:['Cek privacy settings','Post publik','Hindari sensitive content','Audit ulang 48h'] },
-      'INDEX': { title:'Search index hilang', steps:['Pastikan akun publik','Hindari suspend/rename cepat','Post 3-5 kali','Audit ulang 7 hari'] },
-      'PROFILE': { title:'Profile bermasalah', steps:['Cek akun suspend/protected','Update bio & avatar','Login X cek notifikasi','Appeal kalau perlu'] }
+      'SEARCH': { title:currentLang==='id'?'Search hilang':'Search gone', steps:currentLang==='id'?['Kurangi posting spam','Hindari kata sensitif','Post natural 3-7 hari','Audit ulang setelah 48h']:['Reduce spam posting','Avoid sensitive words','Post naturally 3-7 days','Re-audit after 48h'] },
+      'SUGGEST': { title:currentLang==='id'?'Suggest blocked':'Suggest blocked', steps:currentLang==='id'?['Kurangi aktivitas berlebih','Jangan follow/unfollow massal','Istirahat 24-48 jam','Audit ulang']:['Reduce excessive activity','No mass follow/unfollow','Rest 24-48h','Re-audit'] },
+      'QRT': { title:currentLang==='id'?'Quote limited':'Quote limited', steps:currentLang==='id'?['Hindari konten kontroversial','Jangan quote spam','Post original 3 hari','Cek ulang']:['Avoid controversial content','No quote spam','Post original 3 days','Recheck'] },
+      'SPAM': { title:currentLang==='id'?'Spam flag':'Spam flag', steps:currentLang==='id'?['Hapus post berulang','Kurangi link berlebih','Stop mention massal','Post natural 1 minggu']:['Delete repetitive posts','Reduce link spam','Stop mass mentions','Post naturally 1 week'] },
+      'RANK': { title:currentLang==='id'?'Reach turun':'Reach dropped', steps:currentLang==='id'?['Post konsisten quality','Engage organik','Hindari bot-like pattern','Audit ulang 7 hari']:['Post quality consistently','Engage organically','Avoid bot-like patterns','Re-audit 7 days'] },
+      'POST': { title:currentLang==='id'?'Post tidak indexable':'Posts not indexed', steps:currentLang==='id'?['Cek privacy settings','Post publik','Hindari sensitive content','Audit ulang 48h']:['Check privacy settings','Post publicly','Avoid sensitive content','Re-audit 48h'] },
+      'INDEX': { title:currentLang==='id'?'Index hilang':'Index gone', steps:currentLang==='id'?['Pastikan akun publik','Hindari suspend/rename cepat','Post 3-5 kali','Audit ulang 7 hari']:['Ensure public account','Avoid quick suspend/rename','Post 3-5 times','Re-audit 7 days'] },
+      'PROFILE': { title:currentLang==='id'?'Profile bermasalah':'Profile issue', steps:currentLang==='id'?['Cek akun suspend/protected','Update bio & avatar','Login X cek notifikasi','Appeal kalau perlu']:['Check suspend/protected','Update bio & avatar','Login X check notifications','Appeal if needed'] }
     };
+    const playbookSteps = currentLang==='id' ? [
+      { title:'1. Cek status akun', desc:'Pastikan akun tidak suspended/protected. Login ke X dan cek notifikasi.' },
+      { title:'2. Hapus konten bermasalah', desc:'Cari post yang mungkin trigger spam/-sensitive. Hapus atau edit.' },
+      { title:'3. Kurangi aktivitas bot-like', desc:'Stop mass follow/unfollow/like. Post natural, jangan spam mention.' },
+      { title:'4. Post konsisten 3-7 hari', desc:'Post 2-3x sehari, original content, no link spam. Biarkan algoritma reset.' },
+      { title:'5. Audit ulang', desc:'Setelah 48h-7hari, scan ulang di KeGhost. Kalau masih banned, appeal ke X.' },
+      { title:'6. Appeal (opsional)', desc:'Kalau masih ghost setelah 7 hari, submit appeal via help.x.com.' }
+    ] : [
+      { title:'1. Check account status', desc:'Ensure account not suspended/protected. Login to X and check notifications.' },
+      { title:'2. Remove problematic content', desc:'Find posts that may trigger spam/sensitive filters. Delete or edit.' },
+      { title:'3. Reduce bot-like activity', desc:'Stop mass follow/unfollow/like. Post naturally, no spam mentions.' },
+      { title:'4. Post consistently 3-7 days', desc:'Post 2-3x daily, original content, no link spam. Let algorithm reset.' },
+      { title:'5. Re-audit', desc:'After 48h-7days, scan again on KeGhost. If still banned, appeal to X.' },
+      { title:'6. Appeal (optional)', desc:'If still ghosted after 7 days, submit appeal via help.x.com.' }
+    ];
+    const recoverSituations = currentLang==='id' ? [
+      { icon:'💰', title:'Monetisasi', desc:'Creator Revenue / payout dimatikan X' },
+      { icon:'📉', title:'Reach turun', desc:'Posting jarang muncul di timeline orang' },
+      { icon:'🤔', title:'Diagnosis', desc:'Bingung harus mulai dari mana' },
+      { icon:'🧹', title:'Cleanup', desc:'Sudah tahu harus audit / hapus konten' }
+    ] : [
+      { icon:'💰', title:'Monetization', desc:'Creator Revenue / payout disabled by X' },
+      { icon:'📉', title:'Reach dropped', desc:'Posts rarely appear in others timeline' },
+      { icon:'🤔', title:'Diagnosis', desc:'Not sure where to start' },
+      { icon:'🧹', title:'Cleanup', desc:'Already know what to audit / delete' }
+    ];
+    const carouselData = currentLang==='id' ? [
+      { tag:'TOOLS HUB', title:'Tools Hub', desc:'Diagnose, recover, grow — semua alat dalam satu tempat.' },
+      { tag:'APA ITU SHADOWBAN?', title:'Apa itu Shadowban?', desc:'Indexing, penyebab, & opsi penegakan resmi X — bahasa sederhana.' },
+      { tag:'MONETIZATION', title:'Creator Standards', desc:'Aturan monetisasi X — prioritas cleanup sebelum appeal.' },
+      { tag:'X BOOK', title:'X Book', desc:'6 Field Guides — panduan algoritma X, monetisasi, growth.' },
+      { tag:'ACADEMY', title:'KeGhost Academy', desc:'Kelas & komunitas kreator — belajar sambil pakai tool.' },
+      { tag:'AUDIT', title:'Audit Payout', desc:'Case study real creator — apa yang berhasil, apa yang bisa ditiru.' }
+    ] : [
+      { tag:'TOOLS HUB', title:'Tools Hub', desc:'Diagnose, recover, grow — all tools in one place.' },
+      { tag:'SHADOWBAN?', title:'What is Shadowban?', desc:'Indexing, causes, & X enforcement options — simple language.' },
+      { tag:'MONETIZATION', title:'Creator Standards', desc:'X monetization rules — cleanup before appeal.' },
+      { tag:'X BOOK', title:'X Book', desc:'6 Field Guides — X algorithm, monetization, growth.' },
+      { tag:'ACADEMY', title:'KeGhost Academy', desc:'Classes & creator community — learn while using tools.' },
+      { tag:'AUDIT', title:'Audit Payout', desc:'Real creator case studies — what worked, what to copy.' }
+    ];
 
-    let lastResult = null;
-    let lastShareBlob = null;
-    let lastShareUrl = null;
-    let currentFilter = 'all';
+    let lastResult = null, lastShareBlob = null, lastShareUrl = null, currentFilter = 'all', carouselIdx = 0;
 
-    // Float bits
+    // === FLOAT BITS ===
     (function(){const l=document.getElementById('float-layer');['🦫','🍊','🍃','✨','🦫','🍊','🍃','🦫','✨','🍊'].forEach((b,i)=>{const e=document.createElement('span');e.className='float-bit';e.textContent=b;e.style.left=(4+(i*9.5)%92)+'%';e.style.top=(8+((i*17)%80))+'%';e.style.animationDuration=(10+(i%5)*2.2)+'s';e.style.animationDelay=(i*.6)+'s';e.style.fontSize=(.9+(i%3)*.35)+'rem';l.appendChild(e);});})();
 
+    // === STATE ===
     function setState(n){['empty','loading','error','results'].forEach(s=>{const e=document.getElementById('state-'+s);if(!e)return;e.classList.toggle('is-active',s===n);if(s===n){e.classList.remove('fade-swap');void e.offsetWidth;e.classList.add('fade-swap');}});}
+    function setFilter(f){currentFilter=f;document.querySelectorAll('.tab-btn').forEach(b=>{b.classList.toggle('active',b.dataset.filter===f);});renderLayers();}
 
-    const usernameInput = document.getElementById('username');
-    const headerCapy = document.getElementById('header-capy');
-    usernameInput.addEventListener('input',()=>{headerCapy.classList.remove('look-left','look-right');if(!usernameInput.value)return;headerCapy.classList.add(usernameInput.value.length%2?'look-right':'look-left');});
-    usernameInput.addEventListener('blur',()=>{headerCapy.classList.remove('look-left','look-right');});
-    usernameInput.addEventListener('keypress',e=>{if(e.key==='Enter')checkShadowban();});
-    document.getElementById('btn-cek').addEventListener('click',checkShadowban);
-    document.getElementById('btn-resync').addEventListener('click',()=>{if(lastResult)checkShadowban();});
-
-    // Tab filters
-    document.querySelectorAll('.tab-btn').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        currentFilter = btn.dataset.filter;
-        renderLayers();
-      });
+    // === THEME ===
+    document.getElementById('theme-toggle').addEventListener('click',()=>{
+      const cur=document.documentElement.dataset.theme;const next=cur==='dark'?'light':'dark';
+      document.documentElement.dataset.theme=next;
+      document.getElementById('theme-toggle').textContent=next==='dark'?'☀️':'🌙';
+      const tc=document.querySelector('meta[name=theme-color]');if(tc)tc.content=next==='dark'?'#1a1620':'#FFF8F0';
     });
 
-    async function checkShadowban(){
-      const u = usernameInput.value.trim().replace(/^@+/,'');
-      if(!u){usernameInput.focus();headerCapy.classList.add('capy-wiggle');setTimeout(()=>headerCapy.classList.remove('capy-wiggle'),700);return;}
+    // === LANG ===
+    document.getElementById('lang-id').addEventListener('click',()=>{currentLang='id';document.getElementById('lang-id').classList.add('bg-cocoa-400','text-white');document.getElementById('lang-id').classList.remove('surface');document.getElementById('lang-en').classList.remove('bg-cocoa-400','text-white');document.getElementById('lang-en').classList.add('surface');applyI18n();});
+    document.getElementById('lang-en').addEventListener('click',()=>{currentLang='en';document.getElementById('lang-en').classList.add('bg-cocoa-400','text-white');document.getElementById('lang-en').classList.remove('surface');document.getElementById('lang-id').classList.remove('bg-cocoa-400','text-white');document.getElementById('lang-id').classList.add('surface');applyI18n();});
+
+    // === INPUT ===
+    const usernameInput=document.getElementById('username'), headerCapy=document.getElementById('nav-home');
+    usernameInput.addEventListener('input',()=>{headerCapy.style.transform='';if(!usernameInput.value)return;headerCapy.style.transform=usernameInput.value.length%2?'rotate(8deg)':'rotate(-8deg)';});
+    usernameInput.addEventListener('blur',()=>{headerCapy.style.transform='';});
+    usernameInput.addEventListener('keypress',e=>{if(e.key==='Enter')checkShadowban();});
+    document.getElementById('btn-cek').addEventListener('click',checkShadowban);
+    document.getElementById('btn-resync').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban();}});
+    document.getElementById('btn-audit-ulang').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban();}});
+    document.getElementById('btn-deep-scan').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban(true);}});
+    document.getElementById('btn-memorizer').addEventListener('click',openMemorizer);
+    document.getElementById('btn-playbook').addEventListener('click',openPlaybook);
+    document.getElementById('btn-moots').addEventListener('click',()=>{loadRecent(true);});
+    document.getElementById('btn-recover-open').addEventListener('click',openPlaybook);
+    document.getElementById('btn-mem-clear').addEventListener('click',()=>{localStorage.removeItem('keghost_mem');renderMemorizer();});
+
+    // Filter tabs
+    document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>setFilter(btn.dataset.filter)));
+
+    // Ringkasan accordion
+    document.getElementById('btn-ringkasan').addEventListener('click',()=>{
+      const body=document.getElementById('ringkasan-body');
+      body.classList.toggle('open');
+    });
+
+    // Nav home
+    document.getElementById('nav-home').addEventListener('click',()=>{
+      usernameInput.value='';setState('empty');document.getElementById('filter-tabs').classList.add('hidden');
+    });
+
+    // === CHECK ===
+    async function checkShadowban(deep){
+      const u=usernameInput.value.trim().replace(/^@+/,'');
+      if(!u){usernameInput.focus();return;}
       const btn=document.getElementById('btn-cek'),bc=document.getElementById('btn-capy'),bl=document.getElementById('btn-label');
-      btn.disabled=true;bc.classList.add('capy-bounce');bl.textContent='Scanning…';setState('loading');
+      btn.disabled=true;bc.classList.add('capy-bounce');bl.textContent=deep?'Deep scan…':'Scanning…';setState('loading');
       try{
-        const res=await fetch('/api/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u})});
+        const res=await fetch('/api/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,deep:deep||false})});
         const data=await res.json().catch(()=>({}));
         if(!res.ok)throw new Error(data.error||('HTTP '+res.status));
-        renderResults(data);setState('results');loadRecent();
+        renderResults(data);setState('results');
+        document.getElementById('filter-tabs').classList.remove('hidden');
+        loadRecent();saveMemorizer(data);
       }catch(err){
         document.getElementById('error-msg').textContent=(err&&err.message)?err.message:'Yah capybara-nya bingung, coba lagi 🦫';
         setState('error');
-      }finally{btn.disabled=false;bc.classList.remove('capy-bounce');bl.textContent='Mulai Scan';}
+      }finally{btn.disabled=false;bc.classList.remove('capy-bounce');bl.textContent=I18N[currentLang].btn_scan;}
     }
 
+    // === RENDER ===
     function formatCount(n){const m=Number(n)||0;if(m>=1e9)return(m/1e9).toFixed(1).replace(/\.0$/,'')+'B';if(m>=1e6)return(m/1e6).toFixed(1).replace(/\.0$/,'')+'M';if(m>=1e3)return(m/1e3).toFixed(1).replace(/\.0$/,'')+'K';return String(m);}
     function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
     function renderResults(data){
-      lastResult = data;
-      const p = data.profile||{};
-      const pc = document.getElementById('profile-card');
+      lastResult=data;
+      const p=data.profile||{};
+      const pc=document.getElementById('profile-card');
       if(p.username){
         pc.classList.remove('hidden');
         const av=document.getElementById('profile-avatar');
@@ -371,78 +626,187 @@
         document.getElementById('profile-tweets').textContent=formatCount(p.tweets||0);
         document.getElementById('profile-verified').classList.toggle('hidden',!p.verified);
         document.getElementById('profile-protected').classList.toggle('hidden',!p.protected);
-      } else { pc.classList.add('hidden'); }
+      } else pc.classList.add('hidden');
 
-      document.getElementById('result-username').textContent='@'+data.username;
-      const ov=(data.overall||'safe').toLowerCase(), sm=statusMeta[ov]||statusMeta.safe;
-      const badge=document.getElementById('overall-badge');
-      badge.className='inline-flex items-center gap-2 rounded-full px-4 py-2 font-extrabold text-sm shadow-card '+sm.overall;
-      badge.innerHTML='<span class="text-lg leading-none">'+sm.face+'</span><span>'+sm.overallText+'</span>';
+      // Moots section
+      document.getElementById('moots-section').classList.toggle('hidden',!p.username);
+
+      // Nav username
+      const navU=document.getElementById('nav-username');
+      navU.textContent='@'+data.username;navU.classList.remove('hidden');
+
+      // Overall badge
+      const ov=(data.overall||'safe').toLowerCase();
+      const badge=document.getElementById('ringkasan-status');
+      const ovText=ov==='safe'?'Safe ✨':ov==='warning'?'Agak shady 🤔':'Ke-ghost 😢';
+      badge.textContent=ovText;badge.style.color=ov==='safe'?'var(--sage-400)':ov==='warning'?'#F0D48A':'var(--peach-400)';
+
+      // Ringkasan time
       const ts=data.timestamp?new Date(data.timestamp):new Date();
-      document.getElementById('check-time').textContent='Dicek '+ts.toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
-      renderLayers();
-      renderRecover();
+      document.getElementById('ringkasan-time').textContent=ts.toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'});
+
+      // Ringkasan layers (compact)
+      const layers=data.layers||data.tests||[];
+      const rl=document.getElementById('ringkasan-layers');
+      rl.innerHTML='';
+      layers.forEach(l=>{
+        const st=(l.status||'safe').toLowerCase();
+        const isClean=st==='safe';
+        const isDeep=DEEP_LAYERS.includes(l.name);
+        const div=document.createElement('div');
+        div.className='rounded-xl p-2 text-center';
+        div.style.background=st==='safe'?'var(--sage-200)':st==='warning'?'#FFF7E6':'var(--peach-200)';
+        div.innerHTML='<div class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">'+escapeHtml(l.name)+'</div>'
+          +'<div class="text-xs font-extrabold mt-1" style="color:'+(isClean?'var(--sage-400)':st==='warning'?'#8A6410':'var(--peach-400)')+'">'+(isClean?'Clean ✅':st==='warning'?'Waspada ⚠️':'Banned ❌')+'</div>'
+          +(isDeep?'<div class="text-[9px] font-medium mt-0.5" style="color:var(--text-muted);opacity:.6">'+(currentLang==='id'?'Data terbatas':'Limited data')+'</div>':'');
+        rl.appendChild(div);
+      });
+
+      // Grok hint
+      const hasIssue=layers.some(l=>l.status==='banned'||l.status==='warning');
+      document.getElementById('grok-hint').classList.toggle('hidden',!hasIssue);
+
+      // Render layer grid + recover
+      renderLayers();renderRecover();renderCarousel();
     }
 
     function renderLayers(){
-      const data=lastResult||{};
-      const layers=data.layers||data.tests||[];
-      const grid=document.getElementById('layer-grid');
-      grid.innerHTML='';
-      layers.forEach((l,i)=>{
-        const st=(l.status||'safe').toLowerCase(), sm=statusMeta[st]||statusMeta.safe;
-        if(currentFilter==='banned'&&st==='safe')return;
-        if(currentFilter==='clean'&&st!=='safe')return;
+      const data=lastResult||{};const layers=data.layers||data.tests||[];
+      const grid=document.getElementById('layer-grid');grid.innerHTML='';
+      let visible=layers;
+      if(currentFilter==='ban')visible=layers.filter(l=>l.status==='banned'||l.status==='warning');
+      else if(currentFilter==='clean')visible=layers.filter(l=>l.status==='safe');
+      else if(currentFilter==='mod'){// Mod tab: show post moderation info
+        const posts=data.recent_posts||[];
+        if(!posts.length){grid.innerHTML='<div class="col-span-full text-center text-sm py-4" style="color:var(--text-muted)">Tidak ada post untuk moderasi</div>';return;}
+        posts.forEach((p,i)=>{
+          const hasReply=p.replies>0;const hasViews=p.views>0;
+          let status='normal',statusColor='var(--sage-400)',statusText=currentLang==='id'?'Terlihat normal':'Visible';
+          if(!hasViews&&hasReply){status='hidden';statusColor='var(--peach-400)';statusText=currentLang==='id'?'Tidak tersedia':'Unavailable';}
+          else if(!hasReply&&hasViews<100){status='unknown';statusColor='#F0D48A';statusText=currentLang==='id'?'Belum pasti':'Uncertain';}
+          const cell=document.createElement('div');
+          cell.className='layer-cell pop-in rounded-2xl p-3 shadow-card col-span-full sm:col-span-2';
+          cell.style.background='var(--cream-100)';cell.style.border='1.5px solid var(--border)';
+          cell.style.animationDelay=(i*.06)+'s';
+          cell.innerHTML='<div class="flex items-start justify-between gap-2"><div class="min-w-0 flex-1"><div class="text-xs font-medium truncate" style="color:var(--text)">'+escapeHtml((p.text||'').slice(0,80))+'</div><div class="text-[10px] mt-1" style="color:var(--text-muted)">'+(p.likes||0)+' likes · '+(p.views||0)+' views</div></div><span class="text-[10px] font-extrabold px-2 py-1 rounded-full shrink-0" style="background:'+statusColor+';color:#fff">'+statusText+'</span></div>';
+          grid.appendChild(cell);
+        });
+        return;
+      }
+      if(!visible.length){grid.innerHTML='<div class="col-span-full text-center text-sm py-4" style="color:var(--text-muted)">'+(currentLang==='id'?'Tidak ada di filter ini':'None in this filter')+'</div>';return;}
+      visible.forEach((l,i)=>{
+        const st=(l.status||'safe').toLowerCase();
         const icon=LAYER_ICONS[l.name]||'✨';
         const conf=typeof l.confidence==='number'?l.confidence:null;
+        const isDeep=DEEP_LAYERS.includes(l.name);
         const cell=document.createElement('div');
-        cell.className='layer-cell pop-in rounded-2xl border-[1.5px] p-3 shadow-card '+sm.cell;
+        cell.className='layer-cell pop-in rounded-2xl p-3 shadow-card';
+        cell.style.background=st==='safe'?'var(--sage-200)':st==='warning'?'#FFF7E6':'var(--peach-200)';
+        cell.style.border='1.5px solid '+(st==='safe'?'var(--sage-400)':st==='warning'?'#F0D48A':'var(--peach-400)');
         cell.style.animationDelay=(i*.06)+'s';
-        cell.innerHTML='<div class="flex items-center justify-between mb-1.5">'
-          +'<span class="text-lg leading-none">'+icon+'</span>'
-          +'<span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full '+sm.badge+'">'+sm.label+'</span>'
-          +'</div>'
-          +'<div class="font-extrabold text-[13px] text-ink-900 leading-tight">'+escapeHtml(l.name)+'</div>'
-          +'<div class="text-[10px] text-ink-500 mt-1 font-medium leading-snug line-clamp-2">'+escapeHtml(l.desc||'')+'</div>'
-          +(conf!==null?'<div class="mt-2 metric-bar"><div class="metric-fill" style="width:'+Math.min(100,conf)+'%;background:'+(st==='safe'?'#A8C4A0':st==='warning'?'#F0D48A':'#E8A0A0')+'"></div></div><div class="text-[9px] font-bold text-ink-500/60 mt-1">'+conf+'% confidence</div>':'');
+        const label=st==='safe'?'Clean ✅':st==='warning'?'Waspada ⚠️':'Banned ❌';
+        const labelColor=st==='safe'?'var(--sage-400)':st==='warning'?'#8A6410':'var(--peach-400)';
+        cell.innerHTML='<div class="flex items-center justify-between mb-1.5"><span class="text-lg">'+icon+'</span><span class="text-[10px] font-extrabold">'+label+'</span></div>'
+          +'<div class="font-extrabold text-[13px] leading-tight" style="color:var(--text)">'+escapeHtml(l.name)+'</div>'
+          +'<div class="text-[10px] mt-1 font-medium leading-snug line-clamp-2" style="color:var(--text-muted)">'+escapeHtml(l.desc||'')+'</div>'
+          +(isDeep?'<div class="text-[9px] font-medium mt-1" style="color:var(--text-muted);opacity:.5">'+(currentLang==='id'?'Data terbatas (opsional deep)':'Limited (deep optional)')+'</div>':'')
+          +(conf!==null?'<div class="mt-2 metric-bar"><div class="metric-fill" style="width:'+Math.min(100,conf)+'%;background:'+(st==='safe'?'var(--sage-400)':st==='warning'?'#F0D48A':'var(--peach-400)')+'"></div></div><div class="text-[9px] font-bold mt-1" style="color:var(--text-muted)">'+conf+'%</div>':'');
         grid.appendChild(cell);
       });
-      if(!grid.children.length){grid.innerHTML='<div class="col-span-full text-center text-sm text-ink-500/60 py-4">Tidak ada layer di filter ini</div>';}
     }
 
     function renderRecover(){
-      const data=lastResult||{};
-      const layers=data.layers||data.tests||[];
+      const data=lastResult||{};const layers=data.layers||data.tests||[];
       const bad=layers.filter(l=>l.status==='banned'||l.status==='warning');
       const sec=document.getElementById('recover-section');
       if(!bad.length){sec.classList.add('hidden');return;}
       sec.classList.remove('hidden');
-      const wrap=document.getElementById('recover-cards');
-      wrap.innerHTML='';
+      const wrap=document.getElementById('recover-cards');wrap.innerHTML='';
       bad.forEach((l,i)=>{
         const r=recoverMap[l.name];if(!r)return;
-        const st=(l.status||'').toLowerCase();
         const card=document.createElement('div');
-        card.className='recover-card pop-in rounded-2xl border-[1.5px] p-3.5 bg-cream-100 border-cream-300';
+        card.className='recover-card pop-in rounded-2xl p-3.5';
+        card.style.background='var(--cream-100)';card.style.border='1.5px solid var(--border)';
         card.style.animationDelay=(i*.08)+'s';
-        card.innerHTML='<div class="flex items-center gap-2 mb-2"><span class="text-base">'+(st==='banned'?'❌':'⚠️')+'</span><span class="font-extrabold text-sm text-ink-900">'+escapeHtml(r.title)+'</span></div>'
-          +'<ol class="text-xs text-ink-500 font-medium space-y-1.5">'+r.steps.map((s,idx)=>'<li class="flex gap-2"><span class="text-cocoa-400 font-extrabold">'+(idx+1)+'.</span><span>'+escapeHtml(s)+'</span></li>').join('')+'</ol>';
+        card.innerHTML='<div class="flex items-center gap-2 mb-2"><span>'+(l.status==='banned'?'❌':'⚠️')+'</span><span class="font-extrabold text-sm" style="color:var(--text)">'+escapeHtml(r.title)+'</span></div><ol class="text-xs space-y-1.5" style="color:var(--text-muted)">'+r.steps.map((s,idx)=>'<li class="flex gap-2"><span class="font-extrabold" style="color:var(--cocoa-400)">'+(idx+1)+'.</span><span>'+escapeHtml(s)+'</span></li>').join('')+'</ol>';
         wrap.appendChild(card);
       });
     }
 
-    async function loadRecent(){
+    // === CAROUSEL ===
+    function renderCarousel(){
+      const track=document.getElementById('carousel-track');track.innerHTML='';
+      const dots=document.getElementById('carousel-dots');dots.innerHTML='';
+      carouselData.forEach((c,i)=>{
+        const slide=document.createElement('div');slide.className='carousel-slide';
+        slide.innerHTML='<div class="rounded-2xl p-4" style="background:var(--cream-100);border:1.5px solid var(--border)"><div class="text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-block mb-2" style="background:var(--cocoa-400);color:#fff">'+escapeHtml(c.tag)+'</div><div class="font-display text-base font-bold" style="color:var(--cocoa-700)">'+escapeHtml(c.title)+'</div><p class="text-xs font-medium mt-1.5" style="color:var(--text-muted)">'+escapeHtml(c.desc)+'</p></div>';
+        track.appendChild(slide);
+        const dot=document.createElement('button');dot.className='w-2 h-2 rounded-full transition';dot.style.background=i===0?'var(--cocoa-400)':'var(--cream-300)';
+        dot.addEventListener('click',()=>goCarousel(i));dots.appendChild(dot);
+      });
+    }
+    function goCarousel(i){
+      const slides=carouselData.length;if(!slides)return;
+      carouselIdx=((i%slides)+slides)%slides;
+      document.getElementById('carousel-track').style.transform='translateX(-'+(carouselIdx*100)+'%)';
+      document.querySelectorAll('#carousel-dots button').forEach((d,idx)=>d.style.background=idx===carouselIdx?'var(--cocoa-400)':'var(--cream-300)');
+    }
+    document.getElementById('carousel-prev').addEventListener('click',()=>goCarousel(carouselIdx-1));
+    document.getElementById('carousel-next').addEventListener('click',()=>goCarousel(carouselIdx+1));
+
+    // === PLAYBOOK ===
+    function openPlaybook(){
+      const c=document.getElementById('playbook-content');c.innerHTML='';
+      playbookSteps.forEach(s=>{
+        const d=document.createElement('div');d.className='rounded-2xl p-3.5 slide-up';d.style.background='var(--cream-100)';d.style.border='1.5px solid var(--border)';
+        d.innerHTML='<div class="font-extrabold text-sm" style="color:var(--cocoa-700)">'+escapeHtml(s.title)+'</div><p class="text-xs font-medium mt-1" style="color:var(--text-muted)">'+escapeHtml(s.desc)+'</p>';
+        c.appendChild(d);
+      });
+      openModal('playbook-modal');
+    }
+
+    // === MEMORIZER ===
+    function saveMemorizer(data){
+      try{
+        const mem=JSON.parse(localStorage.getItem('keghost_mem')||'[]');
+        const entry={username:data.username,overall:data.overall,timestamp:data.timestamp,profile:{name:(data.profile||{}).name,followers:(data.profile||{}).followers}};
+        mem.unshift(entry);if(mem.length>20)mem.length=20;
+        localStorage.setItem('keghost_mem',JSON.stringify(mem));
+      }catch{}
+    }
+    function renderMemorizer(){
+      const list=document.getElementById('memorizer-list');list.innerHTML='';
+      let mem=[];try{mem=JSON.parse(localStorage.getItem('keghost_mem')||'[]');}catch{}
+      if(!mem.length){list.innerHTML='<p class="text-sm text-center" style="color:var(--text-muted)">Belum ada yang tersimpan</p>';return;}
+      mem.forEach(m=>{
+        const d=document.createElement('button');d.type='button';d.className='w-full text-left rounded-2xl p-3 transition';d.style.background='var(--cream-100)';d.style.border='1.5px solid var(--border)';
+        d.innerHTML='<div class="flex items-center justify-between"><div><span class="font-extrabold text-sm" style="color:var(--text)">@'+escapeHtml(m.username)+'</span><span class="text-xs ml-2" style="color:var(--text-muted)">'+escapeHtml(m.profile?.name||'')+'</span></div><span class="text-xs font-extrabold" style="color:'+(m.overall==='safe'?'var(--sage-400)':m.overall==='warning'?'#F0D48A':'var(--peach-400)')+'">'+(m.overall==='safe'?'Safe':m.overall==='warning'?'Waspada':'Banned')+'</span></div>';
+        d.addEventListener('click',()=>{closeModal('memorizer-modal');usernameInput.value=m.username;checkShadowban();});
+        list.appendChild(d);
+      });
+    }
+    function openMemorizer(){renderMemorizer();openModal('memorizer-modal');}
+
+    // === MODALS ===
+    function openModal(id){document.getElementById(id).classList.add('open');}
+    function closeModal(id){document.getElementById(id).classList.remove('open');}
+    document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+    document.getElementById('btn-close-share').addEventListener('click',()=>closeModal('share-modal'));
+
+    // === RECENT ===
+    async function loadRecent(full){
       try{
         const r=await fetch('/api/recent');if(!r.ok)return;
         const rows=await r.json();if(!rows||!rows.length)return;
         const list=document.getElementById('recent-list');list.innerHTML='';
-        const seen=new Set();
-        rows.forEach(row=>{
+        const seen=new Set();const limit=full?rows.length:8;
+        rows.slice(0,limit).forEach(row=>{
           if(seen.has(row.username))return;seen.add(row.username);
-          const st=(row.overall||'safe').toLowerCase(),sm=statusMeta[st]||statusMeta.safe;
-          const chip=document.createElement('button');
-          chip.type='button';
-          chip.className='hist-chip shrink-0 inline-flex items-center gap-2 rounded-full border-[1.5px] px-3 py-2 text-xs font-extrabold shadow-sm '+sm.cell;
+          const st=(row.overall||'safe').toLowerCase();
+          const chip=document.createElement('button');chip.type='button';
+          chip.className='recent-scroll shrink-0 inline-flex items-center gap-2 rounded-full border-[1.5px] px-3 py-2 text-xs font-extrabold shadow-sm transition';
+          chip.style.background=st==='safe'?'var(--sage-200)':st==='warning'?'#FFF7E6':'var(--peach-200)';
+          chip.style.borderColor=st==='safe'?'var(--sage-400)':st==='warning'?'#F0D48A':'var(--peach-400)';
           const av=row.avatar_url?('<img src="'+escapeHtml(row.avatar_url)+'" class="w-5 h-5 rounded-full object-cover" onerror="this.style.display=\'none\'" />'):'';
           chip.innerHTML=av+'<span>@'+escapeHtml(row.username)+'</span>';
           chip.addEventListener('click',()=>{usernameInput.value=row.username;checkShadowban();});
@@ -451,7 +815,7 @@
       }catch{}
     }
 
-    // Share
+    // === SHARE ===
     function buildShareText(){
       const lines=[
         'Akun X-mu lagi aman… atau ke-ghost? 👀\nCek yuk di KeGhost ❤️🦫⭐\nhttps://keghost.vercel.app/',
@@ -461,7 +825,7 @@
       ];
       return lines[Math.floor(Math.random()*lines.length)];
     }
-    function openComposeOnX(){const t=buildShareText();window.open('https://x.com/compose/post?text='+encodeURIComponent(t),'_blank','noopener,noreferrer');}
+    function openComposeOnX(){window.open('https://x.com/compose/post?text='+encodeURIComponent(buildShareText()),'_blank','noopener,noreferrer');}
     function setShareStatus(m){const e=document.getElementById('share-status');if(e)e.textContent=m||'';}
 
     async function captureReportImage(){
@@ -473,27 +837,20 @@
       await Promise.all(Array.from(card.querySelectorAll('img')).map(img=>{if(img.complete&&img.naturalWidth>0)return Promise.resolve();return new Promise(r=>{img.onload=r;img.onerror=r;setTimeout(r,3000);});}));
       await new Promise(r=>setTimeout(r,50));
       try{
-        const canvas=await html2canvas(card,{backgroundColor:'#FFF8F0',scale:2,useCORS:true,allowTaint:true,logging:false,imageTimeout:3000,onclone:doc=>{const s=doc.createElement('style');s.textContent='*{animation:none!important;transition:none!important;}';doc.head.appendChild(s);}});
+        const canvas=await html2canvas(card,{backgroundColor:document.documentElement.dataset.theme==='dark'?'#1a1620':'#FFF8F0',scale:2,useCORS:true,allowTaint:true,logging:false,imageTimeout:3000,onclone:doc=>{const s=doc.createElement('style');s.textContent='*{animation:none!important;transition:none!important;}';doc.head.appendChild(s);}});
         const blob=await new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('blob fail')),'image/png'));
         return{canvas,blob};
       }finally{brands.forEach(b=>b.style.display='none');noCaps.forEach(el=>el.style.display='');}
     }
-    function openShareModal(blob){
-      if(lastShareUrl)URL.revokeObjectURL(lastShareUrl);lastShareBlob=blob;lastShareUrl=URL.createObjectURL(blob);
-      document.getElementById('share-preview-img').src=lastShareUrl;
-      const m=document.getElementById('share-modal');m.classList.remove('hidden');m.style.display='flex';
-    }
-    function closeShareModal(){const m=document.getElementById('share-modal');m.classList.add('hidden');m.style.display='none';}
     async function downloadShareBlob(blob,username){const a=document.createElement('a');const url=URL.createObjectURL(blob);a.href=url;a.download='keghost-'+(username||'report')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 
     document.getElementById('btn-share-x').addEventListener('click',()=>{openComposeOnX();setShareStatus('Compose X dibuka ❤️🦫⭐');});
-    document.getElementById('btn-download-img').addEventListener('click',async()=>{try{setShareStatus('Bikin screenshot…');const{blob}=await captureReportImage();openShareModal(blob);setShareStatus('Preview siap');}catch(e){setShareStatus('Gagal: '+(e.message||e));}});
-    document.getElementById('btn-close-modal').addEventListener('click',closeShareModal);
-    document.getElementById('share-modal').addEventListener('click',e=>{if(e.target.id==='share-modal')closeShareModal();});
-    document.getElementById('btn-share-preview-x').addEventListener('click',()=>{openComposeOnX();});
+    document.getElementById('btn-download-img').addEventListener('click',async()=>{try{setShareStatus('Bikin screenshot…');const{blob}=await captureReportImage();lastShareBlob=blob;if(lastShareUrl)URL.revokeObjectURL(lastShareUrl);lastShareUrl=URL.createObjectURL(blob);document.getElementById('share-preview-img').src=lastShareUrl;openModal('share-modal');setShareStatus('Preview siap');}catch(e){setShareStatus('Gagal: '+(e.message||e));}});
+    document.getElementById('btn-share-preview-x').addEventListener('click',()=>openComposeOnX());
     document.getElementById('btn-share-preview-dl').addEventListener('click',async()=>{if(!lastShareBlob)return;await downloadShareBlob(lastShareBlob,(lastResult&&lastResult.username)||'report');setShareStatus('Gambar tersimpan 🖼️');});
 
-    window.addEventListener('DOMContentLoaded',()=>{usernameInput.focus();loadRecent();});
+    // === BOOT ===
+    window.addEventListener('DOMContentLoaded',()=>{usernameInput.focus();loadRecent();applyI18n();});
   </script>
 </body>
 </html>
