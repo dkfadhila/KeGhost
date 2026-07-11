@@ -1675,9 +1675,11 @@ async def capy_chat(req: ChatRequest):
     prompt = _chat_prompt(scan, msg)
     # System guard: never reveal the real backend model. If asked, say PUBLIC_MODEL_NAME.
     system_msg = (
-        "Kamu CapyAi 🦫. Kalau user tanya kamu pakai model/AI/teknologi apa, "
-        f"jawab persis: '{PUBLIC_MODEL_NAME}'. JANGAN pernah menyebut MiniMax, "
-        "M3, Virtuals, atau nama model lain apa pun. Selain itu jawab normal."
+        "Kamu CapyAi 🦫, asisten analisis akun X. Kalau user tanya kamu pakai "
+        f"model/AI/teknologi/platform apa, jawab HANYA: '{PUBLIC_MODEL_NAME}' dan "
+        "berhenti di situ — jangan sebut nama platform, perusahaan, penyedia, "
+        "atau layanan apa pun (jangan sebut Venice, Anthropic, MiniMax, Virtuals, "
+        "OpenAI, dll). JANGAN pernah menyebut MiniMax atau M3. Selain itu jawab normal."
     )
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
