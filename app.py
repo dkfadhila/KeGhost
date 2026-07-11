@@ -64,6 +64,26 @@ TWITTER_CT0 = (
 
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
+ASSETS_DIR = BASE_DIR / "assets"
+
+# --- Virtuals compute (CapyAi deep analysis) ---
+VIRTUALS_KEY = (
+    os.environ.get("VIRTUALS_KEY")
+    or os.environ.get("VIRTUALS_API_KEY")
+    or os.environ.get("VIRTU_KEY")
+    or "acp-83a76573584e058953aa"
+).strip()
+VIRTUALS_URL = os.environ.get(
+    "VIRTUALS_URL", "https://compute.virtuals.io/v1/chat/completions"
+)
+VIRTUALS_MODEL = os.environ.get(
+    "VIRTUALS_MODEL", "anthropic-claude-opus-4-8-fast"
+)
+
+# Deep-analysis cache: username -> (expiry_epoch, payload). TTL 10 min.
+DEEP_CACHE: dict = {}
+DEEP_TTL_SEC = 600
+
 
 def ensure_agentx_account_from_env() -> None:
     """Bootstrap agentx account from env cookies when binary is present."""
@@ -1279,6 +1299,178 @@ async def health():
         "audit_layers": 8,
         "note": "On Vercel: TWITTER_AUTH_TOKEN + TWITTER_CT0 power cookie GraphQL fallback (no agentx binary). Local can use AgentX binary or the same env cookies.",
     }
+
+
+@app.get("/assets/{fname}")
+async def serve_asset(fname: str):
+    """Serve static UI assets (capybara mascot, logo)."""
+    safe = re.sub(r"[^a-zA-Z0-9_.\-]", "", fname or "")
+    if not safe or ".." in safe:
+        return Response(status_code=404, content=b"not found")
+    path = ASSETS_DIR / safe
+    if not path.exists() or not path.is_file():
+        return Response(status_code=404, content=b"not found")
+    suf = path.suffix.lower()
+    media = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".ico": "image/x-icon",
+        ".js": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+    }.get(suf, "application/octet-stream")
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+class DeepRequest(BaseModel):
+    username: str
+
+
+def _deep_prompt(payload: dict) -> str:
+    """Build the CapyAi analysis instruction from a scan result."""
+    p = payload.get("profile") or {}
+    layers = payload.get("layers") or []
+    metrics = payload.get("metrics") or {}
+    layer_lines = "\n".join(
+        f"- {l.get('name')}: {l.get('status')} ({l.get('confidence')}%) — {l.get('desc')}"
+        for l in layers
+        if isinstance(l, dict)
+    )
+    followers = p.get("followers") or 0
+    following = p.get("following") or 0
+    tweets = p.get("tweets") or 0
+    return f"""Kamu adalah CapyAi, asisten analisis akun X (Twitter) yang ramah, tenang, dan cerdas — berkarakter kapibara santai. Analisis akun berikut secara mendalam dan berikan output dalam Bahasa Indonesia yang hangat namun teknis akurat.
+
+DATA AKUN:
+- Username: @{p.get('username')}
+- Nama: {p.get('name')}
+- Followers: {followers}
+- Following: {following}
+- Total post: {tweets}
+- Verified: {p.get('verified')}
+- Overall status shadowban: {payload.get('overall')}
+- Metrics: search {metrics.get('search')}, reply {metrics.get('reply')}, quote {metrics.get('quote')}, engagement {metrics.get('engagement')}
+
+HASIL 8-LAYER AUDIT:
+{layer_lines}
+
+Balas HANYA dengan JSON valid (tanpa markdown fence) dengan struktur berikut:
+{{
+  "summary": "ringkasan 2-3 kalimat kondisi akun, hangat & jelas",
+  "growth_insight": {{
+    "follower_following_ratio": <angka rasio followers/following, 2 desimal>,
+    "verdict": "sehat|perlu perhatian|bermasalah",
+    "note": "1-2 kalimat insight rasio & pertumbuhan"
+  }},
+  "engagement_breakdown": {{
+    "score": <0-100 estimasi kualitas engagement>,
+    "note": "penjelasan singkat kualitas engagement"
+  }},
+  "charts": {{
+    "visibility": [
+      {{"label":"Search","value":<0-100>}},
+      {{"label":"Reply","value":<0-100>}},
+      {{"label":"Quote","value":<0-100>}},
+      {{"label":"Engagement","value":<0-100>}},
+      {{"label":"Index","value":<0-100>}}
+    ],
+    "layer_confidence": [ {{"label":"<nama layer>","value":<confidence>}} ... untuk 8 layer ]
+  }},
+  "non_followers_estimate": "kalimat estimasi berapa orang yang di-follow tapi tidak follow balik, berdasarkan rasio (perkiraan kasar, sebut sebagai estimasi)",
+  "solutions": [
+    "solusi/tips ke-1 konkret & actionable",
+    "... total TEPAT 10 solusi untuk mengatasi/mencegah shadowban & meningkatkan visibility, spesifik untuk kondisi akun ini"
+  ]
+}}
+
+Pastikan solutions berisi tepat 10 item. Jangan tambahkan teks apa pun di luar JSON."""
+
+
+@app.post("/api/deep-analysis")
+async def deep_analysis(req: DeepRequest):
+    username = _safe_username(req.username)
+    if not username:
+        return JSONResponse({"error": "username required"}, status_code=400)
+
+    # 10-minute cache
+    now = time.time()
+    cached = DEEP_CACHE.get(username)
+    if cached and cached[0] > now:
+        return JSONResponse({**cached[1], "cached": True})
+    # opportunistic prune
+    for k in [k for k, v in list(DEEP_CACHE.items()) if v[0] <= now]:
+        DEEP_CACHE.pop(k, None)
+
+    # Get a fresh scan to feed the model
+    try:
+        scan = await check_with_agentx(username)
+    except Exception as e:
+        return JSONResponse(
+            {"error": f"Capy gagal ambil data akun: {e}"}, status_code=502
+        )
+
+    prompt = _deep_prompt(scan)
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            r = await client.post(
+                VIRTUALS_URL,
+                headers={
+                    "Authorization": f"Bearer {VIRTUALS_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": VIRTUALS_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        if not (200 <= r.status_code < 300):
+            return JSONResponse(
+                {"error": f"CapyAi HTTP {r.status_code}: {r.text[:200]}"},
+                status_code=502,
+            )
+        data = r.json()
+        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
+
+    # Parse model JSON (strip fences if any)
+    txt = (content or "").strip()
+    if txt.startswith("```"):
+        txt = re.sub(r"^```[a-zA-Z]*\n?", "", txt)
+        txt = re.sub(r"\n?```$", "", txt).strip()
+    analysis = None
+    try:
+        analysis = json.loads(txt)
+    except json.JSONDecodeError:
+        s, e = txt.find("{"), txt.rfind("}")
+        if s >= 0 and e > s:
+            try:
+                analysis = json.loads(txt[s : e + 1])
+            except json.JSONDecodeError:
+                analysis = None
+    if analysis is None:
+        return JSONResponse(
+            {"error": "CapyAi kasih format aneh", "raw": txt[:400]}, status_code=502
+        )
+
+    result = {
+        "username": username,
+        "profile": scan.get("profile"),
+        "overall": scan.get("overall"),
+        "analysis": analysis,
+        "model": VIRTUALS_MODEL,
+        "timestamp": datetime.now().isoformat(),
+    }
+    DEEP_CACHE[username] = (now + DEEP_TTL_SEC, result)
+    return JSONResponse(result)
 
 
 @app.get("/", response_class=HTMLResponse)

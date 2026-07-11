@@ -1,22 +1,13 @@
-# KeGhost
+# KeGhost 🦫
 
-Wondering if X (Twitter) quietly limited your account?
+> Ada Capy yang jagain akun X kamu.
 
-**KeGhost** helps you check whether your profile might be shadowbanned — when your posts, replies, or profile become harder for other people to see, even though nothing looks wrong on your side.
+Kadang rasanya sepi di X — post seperti nggak kelihatan, engagement turun, orang bilang susah nemu kamu. KeGhost hadir buat nemenin.
 
-## What it checks
+Ketik username, tarik napas, dan biarkan Capy yang lihat-lihat. Hangat, pelan, dan menenangkan — seperti kapibara yang lagi berendam di onsen.
 
-KeGhost looks at common visibility issues, including:
+---
 
-- **Search Ban** — your account is hard to find in search
-- **Ghost Ban** — your posts mostly show to followers only
-- **Reply Ban** — your replies do not show up normally
-- **Quote Ban** — your quote posts get limited reach
-- **Typeahead Ban** — your username does not appear while typing in search
-- **Hashtag Ban** — your hashtag posts stay out of hashtag results
+🌿 Tenang · 🍵 Ramah · ✨ Ditemani CapyAi
 
-## Why it exists
-
-Shadowbans are confusing. You keep posting, but engagement drops and people say they cannot find you. KeGhost gives a simple, friendly way to check those signs and understand what might be going on.
-
-
+Made with calm.
