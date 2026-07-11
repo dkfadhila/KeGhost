@@ -100,10 +100,10 @@
     .ringkasan-body.open { max-height: 600px; }
     .carousel-track { display: flex; transition: transform .4s cubic-bezier(.22,1,.36,1); }
     .carousel-slide { min-width: 100%; padding: 0 4px; }
-    .tutu-float { animation: tutuFloat 3s ease-in-out infinite; }
-    @keyframes tutuFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-    .ghost-hide { animation: ghostFade .5s ease forwards; }
-    @keyframes ghostFade { to { opacity: 0; transform: scale(.5); pointer-events: none; } }
+    .capy-float { animation: capyFloat 3s ease-in-out infinite; }
+    @keyframes capyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .capy-hide { animation: capyFade .5s ease forwards; }
+    @keyframes capyFade { to { opacity: 0; transform: scale(.5); pointer-events: none; } }
     .modal-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(61,50,41,.5); display: none; align-items: center; justify-content: center; padding: 16px; }
     .modal-overlay.open { display: flex; }
     .modal-box { width: min(560px, 100%); max-height: 85vh; overflow: auto; }
@@ -368,14 +368,14 @@
       </div>
     </section>
 
-    <!-- Tutu announcement -->
-    <div id="tutu-banner" class="surface rounded-[22px] shadow-soft p-4 mt-4 enter flex items-center gap-3" style="animation-delay:.3s">
-      <div class="tutu-float text-3xl select-none">👻</div>
+    <!-- Capy announcement -->
+    <div id="capy-banner" class="surface rounded-[22px] shadow-soft p-4 mt-4 enter flex items-center gap-3" style="animation-delay:.3s">
+      <div class="capy-float text-3xl select-none">🦫</div>
       <div class="flex-1 min-w-0">
-        <div class="font-display text-sm font-bold" style="color:var(--cocoa-700)">Tutu bilang: Kabar!</div>
-        <p class="text-xs font-medium mt-0.5" style="color:var(--text-muted)" data-i18n="tutu_msg">KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫</p>
+        <div class="font-display text-sm font-bold" style="color:var(--cocoa-700)">Capy bilang: Kabar!</div>
+        <p class="text-xs font-medium mt-0.5" style="color:var(--text-muted)" data-i18n="capy_msg">KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫</p>
       </div>
-      <button type="button" onclick="document.getElementById('tutu-banner').classList.add('ghost-hide')" class="text-sm px-2 py-1 rounded-full surface" data-i18n="btn_hide_ghost">×</button>
+      <button type="button" onclick="document.getElementById('capy-banner').classList.add('capy-hide')" class="text-sm px-2 py-1 rounded-full surface" data-i18n="btn_hide_ghost">×</button>
     </div>
 
     <!-- Footer -->
@@ -444,7 +444,7 @@
         btn_audit:'Audit ulang', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Ketuk situasi di bawah — capybara kasih langkah perbaikan', btn_recover_open:'Buka Recover Suite',
         sec03_title:'Eksplorasi KeGhost', btn_share:'Share ke X', btn_download:'Download gambar',
-        tutu_msg:'KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫', btn_hide_ghost:'×',
+        capy_msg:'KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫', btn_hide_ghost:'×',
         playbook_title:'Playbook Pemulihan Akun', btn_close:'Tutup',
         memorizer_sub:'Hasil scan tersimpan di browser kamu. Klik untuk lihat ulang.', btn_mem_clear:'Hapus semua',
         ph_username:'username X kamu'
@@ -464,7 +464,7 @@
         btn_audit:'Re-audit', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Tap a situation below — capybara gives recovery steps', btn_recover_open:'Open Recover Suite',
         sec03_title:'Explore KeGhost', btn_share:'Share to X', btn_download:'Download image',
-        tutu_msg:'KeGhost free 8 layer audit. Scan as much as you want! 🦫', btn_hide_ghost:'×',
+        capy_msg:'KeGhost free 8 layer audit. Scan as much as you want! 🦫', btn_hide_ghost:'×',
         playbook_title:'Account Recovery Playbook', btn_close:'Close',
         memorizer_sub:'Scan results saved in your browser. Click to view again.', btn_mem_clear:'Clear all',
         ph_username:'your X username'
