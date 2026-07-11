@@ -460,9 +460,9 @@ function followCta(brand){
   const log=$("#chatLog");
   const wrap=document.createElement("div");
   wrap.className="msg capy";
-  const url="https://x.com/"+encodeURIComponent(brand||"hyveridica");
+  const url="https://x.com/"+encodeURIComponent(brand||"hyaerina");
   wrap.innerHTML=`${escapeHtml(LANG==="id"?"Mau kuota lebih? Follow dulu ya 👇":"Want more quota? Follow first 👇")}
-    <a href="${url}" target="_blank" rel="noopener" class="follow-cta">🐦 Follow @${escapeHtml(brand||"hyveridica")}</a>`;
+    <a href="${url}" target="_blank" rel="noopener" class="follow-cta">🐦 Follow @${escapeHtml(brand||"hyaerina")}</a>`;
   log.appendChild(wrap);log.scrollTop=log.scrollHeight;
 }
 async function sendChat(message,template){

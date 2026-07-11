@@ -88,7 +88,7 @@ VIRTUALS_CHAT_MODEL = os.environ.get(
 PUBLIC_MODEL_NAME = "Claude Opus 4.8 Fast"
 
 # --- CapyAi chat quota / follow-gate ---
-BRAND_HANDLE = os.environ.get("BRAND_HANDLE", "hyveridica").lstrip("@")
+BRAND_HANDLE = os.environ.get("BRAND_HANDLE", "hyaerina").lstrip("@")
 CHAT_LIMIT_FOLLOWER = int(os.environ.get("CHAT_LIMIT_FOLLOWER", "20"))
 CHAT_LIMIT_GUEST = int(os.environ.get("CHAT_LIMIT_GUEST", "5"))
 WIB_OFFSET_SEC = 7 * 3600  # UTC+7
