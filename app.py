@@ -83,6 +83,9 @@ VIRTUALS_MODEL = os.environ.get(
 # --- Cline provider (CapyAi chat + deep analysis primary) ---
 # Endpoint: https://api.cline.bot/api/v1/chat/completions
 CLINE_API_KEY = os.environ.get("CLINE_API_KEY", "").strip()
+# Cline Pass (web) uses cookie-session auth instead of Bearer. Set this if
+# you copy the full Cookie string from DevTools while logged into cline.bot.
+CLINE_COOKIE = os.environ.get("CLINE_COOKIE", "").strip()
 CLINE_URL = os.environ.get(
     "CLINE_URL", "https://api.cline.bot/api/v1/chat/completions"
 )
@@ -347,28 +350,49 @@ async def _cline_chat(
 ) -> str:
     """Call Cline /v1/chat/completions. Retry on 429/5xx; refresh-on-401 once.
     Returns the assistant text. Raises RuntimeError on hard failure."""
-    if not (CLINE_API_KEY or _read_cached_token()):
-        raise RuntimeError("CLINE_API_KEY not set on this host")
+    if not (CLINE_API_KEY or CLINE_COOKIE or _read_cached_token()):
+        raise RuntimeError(
+            "Cline auth not set (set CLINE_COOKIE or CLINE_API_KEY in env)"
+        )
 
     last_err = "unknown"
     refreshed = False
     for attempt in range(max_retries + 1):
-        tok = _read_cached_token() or CLINE_API_KEY
+        # Cline Pass web: cookie session. Cline CLI/API: Bearer token.
+        use_cookie = bool(CLINE_COOKIE)
+        cred = (
+            CLINE_COOKIE
+            if use_cookie
+            else (_read_cached_token() or CLINE_API_KEY)
+        )
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if use_cookie:
+            headers["Cookie"] = cred
+            # Cline web also expects a referer + UA — copy browser defaults.
+            headers["Referer"] = "https://app.cline.bot/"
+            headers["Origin"] = "https://app.cline.bot"
+            headers["User-Agent"] = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/126.0.0.0 Safari/537.36"
+            )
+        else:
+            headers["Authorization"] = f"Bearer {cred}"
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 r = await client.post(
                     CLINE_URL,
-                    headers={
-                        "Authorization": f"Bearer {tok}",
-                        "Content-Type": "application/json",
-                    },
+                    headers=headers,
                     json={"model": model, "messages": messages, "stream": False},
                 )
             if 200 <= r.status_code < 300:
                 data = r.json()
                 return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
-            # Auth: try to refresh token once, then retry
-            if r.status_code in (401, 403) and not refreshed:
+            # Auth: try to refresh token once, then retry (only for Bearer path)
+            if r.status_code in (401, 403) and not refreshed and not use_cookie:
                 new_tok = await _refresh_cline_token()
                 if new_tok:
                     refreshed = True
@@ -376,6 +400,11 @@ async def _cline_chat(
                 raise RuntimeError(
                     f"Cline auth expired (HTTP {r.status_code}). "
                     "Set ulang CLINE_API_KEY di Vercel env, atau konfig refresh."
+                )
+            if r.status_code in (401, 403) and use_cookie:
+                raise RuntimeError(
+                    f"Cline cookie expired (HTTP {r.status_code}). "
+                    "Login ulang ke Cline, copy cookie baru, set CLINE_COOKIE di Vercel."
                 )
             # retry only on transient overload / rate
             if r.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
@@ -1859,7 +1888,7 @@ async def capy_chat(req: ChatRequest):
         except Exception as cline_err:
             err_str = str(cline_err)
             # Auth failure — surface clearly, don't hide behind "rewel".
-            if "auth expired" in err_str.lower() or "not set" in err_str.lower():
+            if "auth expired" in err_str.lower() or "not set" in err_str.lower() or "cookie expired" in err_str.lower():
                 return JSONResponse(
                     {
                         "error": "auth",
