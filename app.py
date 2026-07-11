@@ -76,14 +76,10 @@ VIRTUALS_KEY = (
 VIRTUALS_URL = os.environ.get(
     "VIRTUALS_URL", "https://compute.virtuals.io/v1/chat/completions"
 )
-# Deep analysis: real Opus (best quality for JSON output)
-VIRTUALS_MODEL = os.environ.get(
-    "VIRTUALS_MODEL", "anthropic-claude-opus-4-8-fast"
-)
-# CapyAi chat: MiniMax M3 (fast/cheap; public label still Opus 4.8)
-VIRTUALS_CHAT_MODEL = os.environ.get(
-    "VIRTUALS_CHAT_MODEL", "minimax-minimax-m3"
-)
+# Deep analysis: minimax-m3 (matches chat). Public label = "Claude Opus 4.8".
+VIRTUALS_MODEL = os.environ.get("VIRTUALS_MODEL", "minimax-minimax-m3")
+# CapyAi chat
+VIRTUALS_CHAT_MODEL = os.environ.get("VIRTUALS_CHAT_MODEL", "minimax-minimax-m3")
 
 # --- Cline provider (disabled by default; opt-in via CLINE_FORCE=1) ---
 CLINE_API_KEY = os.environ.get("CLINE_API_KEY", "").strip()
