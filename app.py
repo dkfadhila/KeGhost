@@ -79,6 +79,19 @@ VIRTUALS_URL = os.environ.get(
 VIRTUALS_MODEL = os.environ.get(
     "VIRTUALS_MODEL", "anthropic-claude-opus-4-8-fast"
 )
+# CapyAi live chat uses MiniMax M3 (lighter/faster than deep-analysis).
+VIRTUALS_CHAT_MODEL = os.environ.get(
+    "VIRTUALS_CHAT_MODEL", "minimax-minimax-m3"
+)
+# Public-facing model name shown to users everywhere. NEVER expose the real
+# chat backend model name — always report this instead.
+PUBLIC_MODEL_NAME = "Claude Opus 4.8 Fast"
+
+# --- CapyAi chat quota / follow-gate ---
+BRAND_HANDLE = os.environ.get("BRAND_HANDLE", "peachymoo_").lstrip("@")
+CHAT_LIMIT_FOLLOWER = int(os.environ.get("CHAT_LIMIT_FOLLOWER", "20"))
+CHAT_LIMIT_GUEST = int(os.environ.get("CHAT_LIMIT_GUEST", "5"))
+WIB_OFFSET_SEC = 7 * 3600  # UTC+7
 
 # Deep-analysis cache: username -> (expiry_epoch, payload). TTL 10 min.
 DEEP_CACHE: dict = {}
@@ -172,6 +185,72 @@ async def sb_scan_detail(scan_id: int) -> dict | None:
     except Exception:
         pass
     return None
+
+
+def wib_today() -> str:
+    """Current date string in WIB (UTC+7). Quota resets at 00:00 WIB."""
+    return datetime.utcfromtimestamp(time.time() + WIB_OFFSET_SEC).strftime("%Y-%m-%d")
+
+
+async def check_follows_brand(username: str) -> bool:
+    """Does @username follow the brand handle? Uses cookie GraphQL/v1.1.
+    Returns False on any error (fail-closed → treated as guest)."""
+    uname = _safe_username(username)
+    if not uname:
+        return False
+    headers = _cookie_headers()
+    if not headers:
+        return False
+    import urllib.parse
+    qs = urllib.parse.urlencode(
+        {"source_screen_name": uname, "target_screen_name": BRAND_HANDLE}
+    )
+    url = f"https://api.x.com/1.1/friendships/show.json?{qs}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+        if r.status_code != 200:
+            return False
+        rel = (r.json() or {}).get("relationship", {})
+        return bool(rel.get("source", {}).get("following"))
+    except Exception:
+        return False
+
+
+async def sb_chat_quota_get(username: str, day: str) -> int:
+    """How many chats this username has used today (WIB). 0 if none/unavailable."""
+    if not SUPABASE_ON:
+        return 0
+    import urllib.parse
+    uq = urllib.parse.quote(username, safe="")
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/chat_usage"
+                f"?select=count&username=eq.{uq}&day=eq.{day}&limit=1",
+                headers=_sb_headers(),
+            )
+        if 200 <= r.status_code < 300:
+            rows = r.json() or []
+            return int(rows[0]["count"]) if rows else 0
+    except Exception:
+        pass
+    return 0
+
+
+async def sb_chat_quota_incr(username: str, day: str) -> None:
+    """Atomically increment today's chat count via Postgres RPC (upsert)."""
+    if not SUPABASE_ON:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/rpc/bump_chat_usage",
+                headers=_sb_headers(),
+                json={"p_username": username, "p_day": day},
+            )
+    except Exception:
+        pass
 
 
 def ensure_agentx_account_from_env() -> None:
@@ -1555,14 +1634,51 @@ async def capy_chat(req: ChatRequest):
         return JSONResponse({"error": "message required"}, status_code=400)
 
     username = _safe_username(req.username)
+    if not username:
+        return JSONResponse(
+            {"error": "Isi target username dulu ya 🌿", "code": "no_user"},
+            status_code=400,
+        )
+
+    # --- follow gate + daily quota (reset 00:00 WIB) ---
+    day = wib_today()
+    follows = await check_follows_brand(username)
+    limit = CHAT_LIMIT_FOLLOWER if follows else CHAT_LIMIT_GUEST
+    used = await sb_chat_quota_get(username, day)
+    if used >= limit:
+        return JSONResponse(
+            {
+                "error": "limit",
+                "code": "quota",
+                "follows": follows,
+                "limit": limit,
+                "used": used,
+                "brand": BRAND_HANDLE,
+                "reply": (
+                    f"Kuota chat harian @{username} udah habis ({used}/{limit}). "
+                    + (
+                        "Reset lagi jam 00:00 WIB ya 🦫"
+                        if follows
+                        else f"Follow @{BRAND_HANDLE} biar kuota naik jadi {CHAT_LIMIT_FOLLOWER}/hari! Reset tiap 00:00 WIB 🦫"
+                    )
+                ),
+            },
+            status_code=429,
+        )
+
     scan = {"username": username, "profile": {}, "overall": "-", "layers": []}
-    if username:
-        try:
-            scan = await check_with_agentx(username)
-        except Exception:
-            pass  # chat still works without live data
+    try:
+        scan = await check_with_agentx(username)
+    except Exception:
+        pass  # chat still works without live data
 
     prompt = _chat_prompt(scan, msg)
+    # System guard: never reveal the real backend model. If asked, say PUBLIC_MODEL_NAME.
+    system_msg = (
+        "Kamu CapyAi 🦫. Kalau user tanya kamu pakai model/AI/teknologi apa, "
+        f"jawab persis: '{PUBLIC_MODEL_NAME}'. JANGAN pernah menyebut MiniMax, "
+        "M3, Virtuals, atau nama model lain apa pun. Selain itu jawab normal."
+    )
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             r = await client.post(
@@ -1572,8 +1688,11 @@ async def capy_chat(req: ChatRequest):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": VIRTUALS_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "model": VIRTUALS_CHAT_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_msg},
+                        {"role": "user", "content": prompt},
+                    ],
                 },
             )
         if not (200 <= r.status_code < 300):
@@ -1589,10 +1708,23 @@ async def capy_chat(req: ChatRequest):
     if reply.startswith("```"):
         reply = re.sub(r"^```[a-zA-Z]*\n?", "", reply)
         reply = re.sub(r"\n?```$", "", reply).strip()
+    # Belt-and-suspenders: scrub any accidental leak of the real model name.
+    reply = re.sub(r"(?i)minimax[\s\-]*m?3?(\s*preview)?", PUBLIC_MODEL_NAME, reply)
+    reply = re.sub(r"(?i)\bvirtuals\b", PUBLIC_MODEL_NAME, reply)
+
+    # count this successful chat against today's quota
+    await sb_chat_quota_incr(username, day)
+    remaining = max(0, limit - (used + 1))
     return {
         "reply": reply or "Capy lagi bingung, coba tanya lagi ya 🦫",
         "username": username,
         "profile": scan.get("profile") or {},
+        "follows": follows,
+        "limit": limit,
+        "used": used + 1,
+        "remaining": remaining,
+        "brand": BRAND_HANDLE,
+        "model": PUBLIC_MODEL_NAME,
         "timestamp": datetime.now().isoformat(),
     }
 

@@ -448,6 +448,23 @@ $("#chatClose").onclick=closeChat;
 $("#chatOv").onclick=closeChat;
 
 let CHAT_BUSY=false;
+function updateQuotaBadge(data){
+  if(!data || typeof data.limit==="undefined") return;
+  const st=$("#chatStatus");
+  if(!st) return;
+  const rem=(typeof data.remaining!=="undefined")?data.remaining:Math.max(0,data.limit-(data.used||0));
+  const foll=data.follows?"✓":"";
+  st.textContent=(LANG==="id"?`Sisa ${rem}/${data.limit} chat hari ini ${foll}`:`${rem}/${data.limit} chats left today ${foll}`);
+}
+function followCta(brand){
+  const log=$("#chatLog");
+  const wrap=document.createElement("div");
+  wrap.className="msg capy";
+  const url="https://x.com/"+encodeURIComponent(brand||"peachymoo_");
+  wrap.innerHTML=`${escapeHtml(LANG==="id"?"Mau kuota lebih? Follow dulu ya 👇":"Want more quota? Follow first 👇")}
+    <a href="${url}" target="_blank" rel="noopener" class="follow-cta">🐦 Follow @${escapeHtml(brand||"peachymoo_")}</a>`;
+  log.appendChild(wrap);log.scrollTop=log.scrollHeight;
+}
 async function sendChat(message,template){
   if(CHAT_BUSY) return;
   const uname=($("#chatUser").value||"").trim().replace(/^@/,"");
@@ -465,8 +482,20 @@ async function sendChat(message,template){
       body:JSON.stringify({username:uname,message:msg,template:template||""})});
     const data=await r.json();
     typing.remove();
-    if(data.error) throw new Error(data.error);
+    if(r.status===429){
+      // quota exhausted
+      chatMsg(data.reply||t("deepErr"),"capy");
+      if(!data.follows) followCta(data.brand);
+      updateQuotaBadge({limit:data.limit,used:data.used,remaining:0,follows:data.follows});
+      return;
+    }
+    if(data.error && !data.reply) throw new Error(data.error);
     chatMsg(data.reply||"🦫","capy");
+    updateQuotaBadge(data);
+    // gentle nudge when guest is running low
+    if(!data.follows && typeof data.remaining!=="undefined" && data.remaining<=2 && data.remaining>0){
+      followCta(data.brand);
+    }
   }catch(e){
     typing.remove();
     chatMsg(t("deepErr"),"capy");
