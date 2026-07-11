@@ -1236,12 +1236,12 @@ async def get_history(limit: int = 20):
 
 @app.get("/api/recent")
 async def get_recent():
-    """Return last 8 checked accounts: {username, overall, avatar_url, timestamp}."""
+    """Return last 5 checked accounts: {username, overall, avatar_url, timestamp}."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
         "SELECT username, overall, avatar_url, timestamp "
-        "FROM checks ORDER BY timestamp DESC LIMIT 8"
+        "FROM checks ORDER BY timestamp DESC LIMIT 5"
     )
     rows = c.fetchall()
     conn.close()

@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>
     tailwind.config = {
       theme: { extend: {
@@ -95,7 +94,6 @@
     .recent-scroll::-webkit-scrollbar-thumb { background: var(--cocoa-400); border-radius: 999px; }
     .recover-card { transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
     .recover-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(139,111,78,.12); }
-    .share-brand { display: none; } .capturing .share-brand { display: flex !important; } .capturing .no-capture { display: none !important; }
     .ringkasan-body { max-height: 0; overflow: hidden; transition: max-height .4s ease; }
     .ringkasan-body.open { max-height: 600px; }
     .carousel-track { display: flex; transition: transform .4s cubic-bezier(.22,1,.36,1); }
@@ -214,7 +212,7 @@
 
       <!-- Results -->
       <div id="state-results" class="state-panel fade-swap">
-        <div id="share-card" class="space-y-3">
+        <div class="space-y-3">
           <!-- brand for screenshot -->
           <div class="share-brand items-center justify-between px-1 mb-1">
             <div class="flex items-center gap-2">
@@ -256,12 +254,12 @@
             </div>
 
             <!-- PLAYBOOK button -->
-            <button id="btn-playbook" type="button" class="w-full mb-3 text-sm font-extrabold px-4 py-2.5 rounded-full transition flex items-center justify-center gap-2 no-capture" style="background:var(--lav-200);color:var(--lav-400)" data-i18n="btn_playbook">
+            <button id="btn-playbook" type="button" class="w-full mb-3 text-sm font-extrabold px-4 py-2.5 rounded-full transition flex items-center justify-center gap-2" style="background:var(--lav-200);color:var(--lav-400)" data-i18n="btn_playbook">
               📋 <span data-i18n="btn_playbook_text">Buka playbook pemulihan akun</span>
             </button>
 
             <!-- RINGKASAN accordion -->
-            <div class="rounded-2xl p-3.5 mb-3 no-capture" style="background:var(--cream-100);border:1.5px solid var(--border)">
+            <div class="rounded-2xl p-3.5 mb-3" style="background:var(--cream-100);border:1.5px solid var(--border)">
               <button id="btn-ringkasan" type="button" class="w-full flex items-center justify-between text-left">
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-extrabold" data-i18n="ringkasan">RINGKASAN</span>
@@ -278,7 +276,7 @@
             </div>
 
             <!-- Grok moderation hint -->
-            <div id="grok-hint" class="rounded-2xl p-3 mb-3 no-capture hidden" style="background:var(--lav-200);border:1.5px solid var(--lav-400)">
+            <div id="grok-hint" class="rounded-2xl p-3 mb-3 hidden" style="background:var(--lav-200);border:1.5px solid var(--lav-400)">
               <div class="flex items-start gap-2">
                 <span class="text-sm">🤖</span>
                 <div class="flex-1">
@@ -290,7 +288,7 @@
             </div>
 
             <!-- Action buttons -->
-            <div class="flex flex-wrap gap-2 no-capture">
+            <div class="flex flex-wrap gap-2">
               <button id="btn-audit-ulang" type="button" class="text-xs font-extrabold px-3 py-2 rounded-full transition flex items-center gap-1.5" style="background:var(--cream-200);color:var(--cocoa-700)">
                 <span>🔄</span><span data-i18n="btn_audit">Audit ulang</span>
               </button>
@@ -333,27 +331,8 @@
               <div id="carousel-dots" class="flex gap-1.5"></div>
               <button id="carousel-next" type="button" class="text-sm px-2 py-1 rounded-full surface">→</button>
             </div>
-          </div>
+          </div></div><!-- /share-card -->
 
-          <!-- Share brand footer for screenshot -->
-          <div class="share-brand items-center justify-between px-2 pt-1">
-            <div class="text-xs font-bold" style="color:var(--text-muted)">Made with 🦫 by PICA</div>
-            <div class="text-xs font-extrabold" style="color:var(--cocoa-400)">keghost.vercel.app</div>
-          </div>
-        </div><!-- /share-card -->
-
-        <!-- Share actions -->
-        <div class="no-capture surface rounded-[22px] shadow-soft p-4 mt-3">
-          <div class="flex flex-col sm:flex-row gap-2.5">
-            <button id="btn-share-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3 shadow-pill" style="background:#111;min-height:48px">
-              <span>𝕏</span><span data-i18n="btn_share">Share ke X</span>
-            </button>
-            <button id="btn-download-img" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3 shadow-pill" style="background:var(--cocoa-400);min-height:48px">
-              <span>🖼️</span><span data-i18n="btn_download">Download gambar</span>
-            </button>
-          </div>
-          <p id="share-status" class="mt-2 text-xs font-bold min-h-[1rem]" style="color:var(--text-muted)"></p>
-        </div>
       </div>
     </section>
 
@@ -400,20 +379,6 @@
     </div>
   </div>
 
-  <!-- Share modal -->
-  <div id="share-modal" class="modal-overlay" style="align-items:flex-end">
-    <div class="modal-box surface rounded-3xl shadow-2xl p-4">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-display text-lg font-bold" style="color:var(--cocoa-700)">Preview report</div>
-        <button type="button" id="btn-close-share" class="text-sm font-extrabold px-3 py-1 rounded-full surface" data-i18n="btn_close">Tutup</button>
-      </div>
-      <img id="share-preview-img" alt="" class="w-full rounded-2xl block" style="border:1px solid var(--border)" />
-      <div class="flex flex-col sm:flex-row gap-2.5 mt-3">
-        <button id="btn-share-preview-x" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3" style="background:#111">Share ke X</button>
-        <button id="btn-share-preview-dl" type="button" class="flex-1 inline-flex items-center justify-center gap-2 rounded-full text-white font-extrabold px-5 py-3" style="background:var(--cocoa-400)">Download</button>
-      </div>
-    </div>
-  </div>
 
   <script>
     // === I18N ===
@@ -432,7 +397,7 @@
         grok_hint:'Jangan-jangan ada postingan kamu yang bermasalah di moderasi? Cek lewat tab Mod.', btn_mod_tab:'Buka tab Mod',
         btn_audit:'Audit ulang', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Ketuk situasi di bawah — capybara kasih langkah perbaikan', btn_recover_open:'Buka Recover Suite',
-        sec03_title:'Eksplorasi KeGhost', btn_share:'Share ke X', btn_download:'Download gambar',
+        sec03_title:'Eksplorasi KeGhost',
         capy_msg:'KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫', btn_hide_ghost:'×',
         playbook_title:'Playbook Pemulihan Akun', btn_close:'Tutup',
         memorizer_sub:'Hasil scan tersimpan di browser kamu. Klik untuk lihat ulang.', btn_mem_clear:'Hapus semua',
@@ -452,7 +417,7 @@
         grok_hint:'Maybe your posts have moderation issues? Check via Mod tab.', btn_mod_tab:'Open Mod tab',
         btn_audit:'Re-audit', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Tap a situation below — capybara gives recovery steps', btn_recover_open:'Open Recover Suite',
-        sec03_title:'Explore KeGhost', btn_share:'Share to X', btn_download:'Download image',
+        sec03_title:'Explore KeGhost',
         capy_msg:'KeGhost free 8 layer audit. Scan as much as you want! 🦫', btn_hide_ghost:'×',
         playbook_title:'Account Recovery Playbook', btn_close:'Close',
         memorizer_sub:'Scan results saved in your browser. Click to view again.', btn_mem_clear:'Clear all',
@@ -777,7 +742,6 @@
     function openModal(id){document.getElementById(id).classList.add('open');}
     function closeModal(id){document.getElementById(id).classList.remove('open');}
     document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
-    document.getElementById('btn-close-share').addEventListener('click',()=>closeModal('share-modal'));
 
     // === RECENT ===
     async function loadRecent(full){
@@ -802,38 +766,8 @@
     }
 
     // === SHARE ===
-    function buildShareText(){
-      const lines=[
-        'Akun X-mu lagi aman… atau ke-ghost? 👀\nCek yuk di KeGhost ❤️🦫⭐\nhttps://keghost.vercel.app/',
-        'Soft check dulu sebelum overthinking ✨\nKeGhost bantu cek shadowban-mu 🦫💛\nhttps://keghost.vercel.app/',
-        'Hey bestie, udah cek shadowban belum? 🌸\nSantuy aja, capybara bantu ❤️🦫⭐\nhttps://keghost.vercel.app/',
-        'Kalau engagement aneh, jangan panik dulu 🫧\nCoba cek di sini ya ❤️🦫⭐\nhttps://keghost.vercel.app/'
-      ];
-      return lines[Math.floor(Math.random()*lines.length)];
-    }
-    function openComposeOnX(){window.open('https://x.com/compose/post?text='+encodeURIComponent(buildShareText()),'_blank','noopener,noreferrer');}
-    function setShareStatus(m){const e=document.getElementById('share-status');if(e)e.textContent=m||'';}
-
-    async function captureReportImage(){
-      if(typeof html2canvas!=='function')throw new Error('html2canvas belum ke-load');
-      const card=document.getElementById('share-card');if(!card)throw new Error('share card missing');
-      const brands=card.querySelectorAll('.share-brand');const noCaps=card.querySelectorAll('.no-capture');
-      brands.forEach(b=>b.style.display='flex');noCaps.forEach(el=>el.style.display='none');
-      try{if(document.fonts&&document.fonts.ready)await Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,1000))]);}catch(_){}
-      await Promise.all(Array.from(card.querySelectorAll('img')).map(img=>{if(img.complete&&img.naturalWidth>0)return Promise.resolve();return new Promise(r=>{img.onload=r;img.onerror=r;setTimeout(r,3000);});}));
-      await new Promise(r=>setTimeout(r,50));
-      try{
-        const canvas=await html2canvas(card,{backgroundColor:document.documentElement.dataset.theme==='dark'?'#1a1620':'#FFF8F0',scale:2,useCORS:true,allowTaint:true,logging:false,imageTimeout:3000,onclone:doc=>{const s=doc.createElement('style');s.textContent='*{animation:none!important;transition:none!important;}';doc.head.appendChild(s);}});
-        const blob=await new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error('blob fail')),'image/png'));
-        return{canvas,blob};
-      }finally{brands.forEach(b=>b.style.display='none');noCaps.forEach(el=>el.style.display='');}
-    }
     async function downloadShareBlob(blob,username){const a=document.createElement('a');const url=URL.createObjectURL(blob);a.href=url;a.download='keghost-'+(username||'report')+'.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);}
 
-    document.getElementById('btn-share-x').addEventListener('click',()=>{openComposeOnX();setShareStatus('Compose X dibuka ❤️🦫⭐');});
-    document.getElementById('btn-download-img').addEventListener('click',async()=>{try{setShareStatus('Bikin screenshot…');const{blob}=await captureReportImage();lastShareBlob=blob;if(lastShareUrl)URL.revokeObjectURL(lastShareUrl);lastShareUrl=URL.createObjectURL(blob);document.getElementById('share-preview-img').src=lastShareUrl;openModal('share-modal');setShareStatus('Preview siap');}catch(e){setShareStatus('Gagal: '+(e.message||e));}});
-    document.getElementById('btn-share-preview-x').addEventListener('click',()=>openComposeOnX());
-    document.getElementById('btn-share-preview-dl').addEventListener('click',async()=>{if(!lastShareBlob)return;await downloadShareBlob(lastShareBlob,(lastResult&&lastResult.username)||'report');setShareStatus('Gambar tersimpan 🖼️');});
 
     // === BOOT ===
     window.addEventListener('DOMContentLoaded',()=>{usernameInput.focus();loadRecent();applyI18n();});
