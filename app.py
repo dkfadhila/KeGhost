@@ -90,8 +90,8 @@ CLINE_URL = os.environ.get(
     "CLINE_URL", "https://api.cline.bot/api/v1/chat/completions"
 )
 # Real backend models. Public label is still "Claude Opus 4.8" — never exposed.
-CLINE_CHAT_MODEL = os.environ.get("CLINE_CHAT_MODEL", "cline-pass/qwen3.7-max")
-CLINE_DEEP_MODEL = os.environ.get("CLINE_DEEP_MODEL", "cline-pass/qwen3.7-max")
+CLINE_CHAT_MODEL = os.environ.get("CLINE_CHAT_MODEL", "cline-pass/mimo-2.5")
+CLINE_DEEP_MODEL = os.environ.get("CLINE_DEEP_MODEL", "cline-pass/mimo-2.5")
 # Fallback when Cline fails — try Virtuals. Hidden from users.
 DEEP_FALLBACK_TO_VIRTUALS = (
     os.environ.get("DEEP_FALLBACK_TO_VIRTUALS", "1").strip() not in ("0", "false", "no")
