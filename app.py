@@ -66,12 +66,12 @@ AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
 ASSETS_DIR = BASE_DIR / "assets"
 
-# --- Virtuals compute (CapyAi deep analysis) ---
+# --- Virtuals compute (kept as optional fallback) ---
 VIRTUALS_KEY = (
     os.environ.get("VIRTUALS_KEY")
     or os.environ.get("VIRTUALS_API_KEY")
     or os.environ.get("VIRTU_KEY")
-    or "acp-83a76573584e058953aa"
+    or ""
 ).strip()
 VIRTUALS_URL = os.environ.get(
     "VIRTUALS_URL", "https://compute.virtuals.io/v1/chat/completions"
@@ -79,9 +79,19 @@ VIRTUALS_URL = os.environ.get(
 VIRTUALS_MODEL = os.environ.get(
     "VIRTUALS_MODEL", "anthropic-claude-opus-4-8-fast"
 )
-# CapyAi live chat uses MiniMax M3 (lighter/faster than deep-analysis).
-VIRTUALS_CHAT_MODEL = os.environ.get(
-    "VIRTUALS_CHAT_MODEL", "minimax-minimax-m3"
+
+# --- Cline provider (CapyAi chat + deep analysis primary) ---
+# Endpoint: https://api.cline.bot/api/v1/chat/completions
+CLINE_API_KEY = os.environ.get("CLINE_API_KEY", "").strip()
+CLINE_URL = os.environ.get(
+    "CLINE_URL", "https://api.cline.bot/api/v1/chat/completions"
+)
+# Real backend models. Public label is still "Claude Opus 4.8" — never exposed.
+CLINE_CHAT_MODEL = os.environ.get("CLINE_CHAT_MODEL", "cline-pass/qwen3.7-max")
+CLINE_DEEP_MODEL = os.environ.get("CLINE_DEEP_MODEL", "cline-pass/qwen3.7-max")
+# Fallback when Cline fails — try Virtuals. Hidden from users.
+DEEP_FALLBACK_TO_VIRTUALS = (
+    os.environ.get("DEEP_FALLBACK_TO_VIRTUALS", "1").strip() not in ("0", "false", "no")
 )
 # Public-facing model name shown to users everywhere. NEVER expose the real
 # chat backend model name — always report this instead.
@@ -251,6 +261,73 @@ async def sb_chat_quota_incr(username: str, day: str) -> None:
             )
     except Exception:
         pass
+
+
+async def _cline_chat(
+    model: str,
+    messages: list,
+    *,
+    timeout: float = 60.0,
+    max_retries: int = 2,
+) -> str:
+    """Call Cline /v1/chat/completions with retry-on-503.
+    Returns the assistant text. Raises RuntimeError on hard failure."""
+    if not CLINE_API_KEY:
+        raise RuntimeError("CLINE_API_KEY not set on this host")
+    last_err = "unknown"
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(
+                    CLINE_URL,
+                    headers={
+                        "Authorization": f"Bearer {CLINE_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": model, "messages": messages, "stream": False},
+                )
+            if 200 <= r.status_code < 300:
+                data = r.json()
+                return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            # retry only on transient overload / rate
+            if r.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                await asyncio.sleep(0.6 * (attempt + 1))
+                continue
+            last_err = f"Cline HTTP {r.status_code}: {r.text[:160]}"
+            break
+        except (httpx.TimeoutException, asyncio.TimeoutError) as e:
+            last_err = f"Cline timeout: {e}"
+            if attempt < max_retries:
+                await asyncio.sleep(0.6 * (attempt + 1))
+                continue
+            break
+        except Exception as e:
+            last_err = f"Cline error: {e}"
+            break
+    raise RuntimeError(last_err)
+
+
+async def _virtuals_chat(
+    model: str,
+    messages: list,
+    *,
+    timeout: float = 90.0,
+) -> str:
+    if not VIRTUALS_KEY:
+        raise RuntimeError("VIRTUALS_KEY not set")
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        r = await client.post(
+            VIRTUALS_URL,
+            headers={
+                "Authorization": f"Bearer {VIRTUALS_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={"model": model, "messages": messages},
+        )
+    if not (200 <= r.status_code < 300):
+        raise RuntimeError(f"Virtuals HTTP {r.status_code}: {r.text[:160]}")
+    data = r.json()
+    return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
 
 
 def ensure_agentx_account_from_env() -> None:
@@ -1678,31 +1755,30 @@ async def capy_chat(req: ChatRequest):
         "Kamu CapyAi 🦫, asisten analisis akun X. Kalau user tanya kamu pakai "
         f"model/AI/teknologi/platform apa, jawab HANYA: '{PUBLIC_MODEL_NAME}' dan "
         "berhenti di situ — jangan sebut nama platform, perusahaan, penyedia, "
-        "atau layanan apa pun (jangan sebut Venice, Anthropic, MiniMax, Virtuals, "
-        "OpenAI, dll). JANGAN pernah menyebut MiniMax atau M3. Selain itu jawab normal."
+        "atau layanan apa pun (jangan sebut Cline, Venice, Anthropic, MiniMax, "
+        "Virtuals, Qwen, OpenAI, dll). JANGAN pernah menyebut nama model backend. "
+        "Selain itu jawab normal."
     )
+    messages = [
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": prompt},
+    ]
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            r = await client.post(
-                VIRTUALS_URL,
-                headers={
-                    "Authorization": f"Bearer {VIRTUALS_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": VIRTUALS_CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_msg},
-                        {"role": "user", "content": prompt},
-                    ],
-                },
-            )
-        if not (200 <= r.status_code < 300):
-            return JSONResponse(
-                {"error": f"CapyAi HTTP {r.status_code}"}, status_code=502
-            )
-        data = r.json()
-        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        try:
+            content = await _cline_chat(CLINE_CHAT_MODEL, messages, timeout=60.0)
+        except Exception as cline_err:
+            # Fallback to Virtuals only if Cline is the failing one.
+            if not VIRTUALS_KEY:
+                return JSONResponse(
+                    {"error": f"CapyAi error: {cline_err}"}, status_code=502
+                )
+            try:
+                content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=60.0)
+            except Exception as virt_err:
+                return JSONResponse(
+                    {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
+                    status_code=502,
+                )
     except Exception as e:
         return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
 
@@ -1815,26 +1891,22 @@ async def deep_analysis(req: DeepRequest):
         )
 
     prompt = _deep_prompt(scan)
+    messages = [{"role": "user", "content": prompt}]
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            r = await client.post(
-                VIRTUALS_URL,
-                headers={
-                    "Authorization": f"Bearer {VIRTUALS_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": VIRTUALS_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                },
-            )
-        if not (200 <= r.status_code < 300):
-            return JSONResponse(
-                {"error": f"CapyAi HTTP {r.status_code}: {r.text[:200]}"},
-                status_code=502,
-            )
-        data = r.json()
-        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        try:
+            content = await _cline_chat(CLINE_DEEP_MODEL, messages, timeout=90.0)
+        except Exception as cline_err:
+            if not DEEP_FALLBACK_TO_VIRTUALS or not VIRTUALS_KEY:
+                return JSONResponse(
+                    {"error": f"CapyAi error: {cline_err}"}, status_code=502
+                )
+            try:
+                content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=90.0)
+            except Exception as virt_err:
+                return JSONResponse(
+                    {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
+                    status_code=502,
+                )
     except Exception as e:
         return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
 
@@ -1863,7 +1935,7 @@ async def deep_analysis(req: DeepRequest):
         "profile": scan.get("profile"),
         "overall": scan.get("overall"),
         "analysis": analysis,
-        "model": VIRTUALS_MODEL,
+        "model": PUBLIC_MODEL_NAME,
         "timestamp": datetime.now().isoformat(),
     }
     DEEP_CACHE[username] = (now + DEEP_TTL_SEC, result)
