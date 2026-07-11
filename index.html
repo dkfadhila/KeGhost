@@ -94,8 +94,6 @@
     .recent-scroll::-webkit-scrollbar-thumb { background: var(--cocoa-400); border-radius: 999px; }
     .recover-card { transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
     .recover-card:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(139,111,78,.12); }
-    .ringkasan-body { max-height: 0; overflow: hidden; transition: max-height .4s ease; }
-    .ringkasan-body.open { max-height: 600px; }
     .carousel-track { display: flex; transition: transform .4s cubic-bezier(.22,1,.36,1); }
     .carousel-slide { min-width: 100%; padding: 0 4px; }
     .capy-float { animation: capyFloat 3s ease-in-out infinite; }
@@ -253,28 +251,6 @@
               <h2 class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="sec01_title">Cek shadowban</h2>
             </div>
 
-            <!-- PLAYBOOK button -->
-            <button id="btn-playbook" type="button" class="w-full mb-3 text-sm font-extrabold px-4 py-2.5 rounded-full transition flex items-center justify-center gap-2" style="background:var(--lav-200);color:var(--lav-400)" data-i18n="btn_playbook">
-              📋 <span data-i18n="btn_playbook_text">Buka playbook pemulihan akun</span>
-            </button>
-
-            <!-- RINGKASAN accordion -->
-            <div class="rounded-2xl p-3.5 mb-3" style="background:var(--cream-100);border:1.5px solid var(--border)">
-              <button id="btn-ringkasan" type="button" class="w-full flex items-center justify-between text-left">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-extrabold" data-i18n="ringkasan">RINGKASAN</span>
-                  <span id="ringkasan-time" class="text-[11px] font-bold" style="color:var(--text-muted)"></span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span id="ringkasan-status" class="text-sm font-extrabold"></span>
-                  <span class="text-xs" style="color:var(--text-muted)">▼</span>
-                </div>
-              </button>
-              <div id="ringkasan-body" class="ringkasan-body mt-0">
-                <div id="ringkasan-layers" class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3"></div>
-              </div>
-            </div>
-
             <!-- Grok moderation hint -->
             <div id="grok-hint" class="rounded-2xl p-3 mb-3 hidden" style="background:var(--lav-200);border:1.5px solid var(--lav-400)">
               <div class="flex items-start gap-2">
@@ -355,16 +331,6 @@
     </footer>
   </div>
 
-  <!-- Playbook modal -->
-  <div id="playbook-modal" class="modal-overlay">
-    <div class="modal-box surface rounded-3xl shadow-2xl p-5">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-display text-lg font-bold" style="color:var(--cocoa-700)" data-i18n="playbook_title">Playbook Pemulihan Akun</div>
-        <button type="button" onclick="closeModal('playbook-modal')" class="text-sm font-extrabold px-3 py-1 rounded-full surface" data-i18n="btn_close">Tutup</button>
-      </div>
-      <div id="playbook-content" class="space-y-3"></div>
-    </div>
-  </div>
 
   <!-- Memorizer modal -->
   <div id="memorizer-modal" class="modal-overlay">
@@ -393,13 +359,13 @@
         error_title:'Yah capybara-nya bingung', btn_retry:'Coba lagi',
         followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
        
-        sec01_title:'Cek shadowban', btn_playbook_text:'Buka playbook pemulihan akun', ringkasan:'RINGKASAN',
+        sec01_title:'Cek shadowban',
         grok_hint:'Jangan-jangan ada postingan kamu yang bermasalah di moderasi? Cek lewat tab Mod.', btn_mod_tab:'Buka tab Mod',
         btn_audit:'Audit ulang', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Ketuk situasi di bawah — capybara kasih langkah perbaikan', btn_recover_open:'Buka Recover Suite',
         sec03_title:'Eksplorasi KeGhost',
         capy_msg:'KeGhost gratis 8 lapis audit. Scan sebanyak yang kamu mau! 🦫', btn_hide_ghost:'×',
-        playbook_title:'Playbook Pemulihan Akun', btn_close:'Tutup',
+        btn_close:'Tutup',
         memorizer_sub:'Hasil scan tersimpan di browser kamu. Klik untuk lihat ulang.', btn_mem_clear:'Hapus semua',
         ph_username:'username X kamu'
       },
@@ -413,13 +379,13 @@
         error_title:'Oops capybara is confused', btn_retry:'Try again',
         followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
        
-        sec01_title:'Shadowban check', btn_playbook_text:'Open account recovery playbook', ringkasan:'SUMMARY',
+        sec01_title:'Shadowban check',
         grok_hint:'Maybe your posts have moderation issues? Check via Mod tab.', btn_mod_tab:'Open Mod tab',
         btn_audit:'Re-audit', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
         sec02_title:'Recover Suite', sec02_sub:'Tap a situation below — capybara gives recovery steps', btn_recover_open:'Open Recover Suite',
         sec03_title:'Explore KeGhost',
         capy_msg:'KeGhost free 8 layer audit. Scan as much as you want! 🦫', btn_hide_ghost:'×',
-        playbook_title:'Account Recovery Playbook', btn_close:'Close',
+        btn_close:'Close',
         memorizer_sub:'Scan results saved in your browser. Click to view again.', btn_mem_clear:'Clear all',
         ph_username:'your X username'
       }
@@ -448,23 +414,7 @@
       'POST': { title:currentLang==='id'?'Post tidak indexable':'Posts not indexed', steps:currentLang==='id'?['Cek privacy settings','Post publik','Hindari sensitive content','Audit ulang 48h']:['Check privacy settings','Post publicly','Avoid sensitive content','Re-audit 48h'] },
       'INDEX': { title:currentLang==='id'?'Index hilang':'Index gone', steps:currentLang==='id'?['Pastikan akun publik','Hindari suspend/rename cepat','Post 3-5 kali','Audit ulang 7 hari']:['Ensure public account','Avoid quick suspend/rename','Post 3-5 times','Re-audit 7 days'] },
       'PROFILE': { title:currentLang==='id'?'Profile bermasalah':'Profile issue', steps:currentLang==='id'?['Cek akun suspend/protected','Update bio & avatar','Login X cek notifikasi','Appeal kalau perlu']:['Check suspend/protected','Update bio & avatar','Login X check notifications','Appeal if needed'] }
-    };
-    const playbookSteps = currentLang==='id' ? [
-      { title:'1. Cek status akun', desc:'Pastikan akun tidak suspended/protected. Login ke X dan cek notifikasi.' },
-      { title:'2. Hapus konten bermasalah', desc:'Cari post yang mungkin trigger spam/-sensitive. Hapus atau edit.' },
-      { title:'3. Kurangi aktivitas bot-like', desc:'Stop mass follow/unfollow/like. Post natural, jangan spam mention.' },
-      { title:'4. Post konsisten 3-7 hari', desc:'Post 2-3x sehari, original content, no link spam. Biarkan algoritma reset.' },
-      { title:'5. Audit ulang', desc:'Setelah 48h-7hari, scan ulang di KeGhost. Kalau masih banned, appeal ke X.' },
-      { title:'6. Appeal (opsional)', desc:'Kalau masih ghost setelah 7 hari, submit appeal via help.x.com.' }
-    ] : [
-      { title:'1. Check account status', desc:'Ensure account not suspended/protected. Login to X and check notifications.' },
-      { title:'2. Remove problematic content', desc:'Find posts that may trigger spam/sensitive filters. Delete or edit.' },
-      { title:'3. Reduce bot-like activity', desc:'Stop mass follow/unfollow/like. Post naturally, no spam mentions.' },
-      { title:'4. Post consistently 3-7 days', desc:'Post 2-3x daily, original content, no link spam. Let algorithm reset.' },
-      { title:'5. Re-audit', desc:'After 48h-7days, scan again on KeGhost. If still banned, appeal to X.' },
-      { title:'6. Appeal (optional)', desc:'If still ghosted after 7 days, submit appeal via help.x.com.' }
-    ];
-    const recoverSituations = currentLang==='id' ? [
+    };    const recoverSituations = currentLang==='id' ? [
       { icon:'💰', title:'Monetisasi', desc:'Creator Revenue / payout dimatikan X' },
       { icon:'📉', title:'Reach turun', desc:'Posting jarang muncul di timeline orang' },
       { icon:'🤔', title:'Diagnosis', desc:'Bingung harus mulai dari mana' },
@@ -522,20 +472,10 @@
     document.getElementById('btn-audit-ulang').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban();}});
     document.getElementById('btn-deep-scan').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban(true);}});
     document.getElementById('btn-memorizer').addEventListener('click',openMemorizer);
-    document.getElementById('btn-playbook').addEventListener('click',openPlaybook);
-        document.getElementById('btn-recover-open').addEventListener('click',openPlaybook);
-    document.getElementById('btn-mem-clear').addEventListener('click',()=>{localStorage.removeItem('keghost_mem');renderMemorizer();});
+                document.getElementById('btn-mem-clear').addEventListener('click',()=>{localStorage.removeItem('keghost_mem');renderMemorizer();});
 
     // Filter tabs
-    document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>setFilter(btn.dataset.filter)));
-
-    // Ringkasan accordion
-    document.getElementById('btn-ringkasan').addEventListener('click',()=>{
-      const body=document.getElementById('ringkasan-body');
-      body.classList.toggle('open');
-    });
-
-    // Nav home
+    document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>setFilter(btn.dataset.filter)));    // Nav home
     document.getElementById('nav-home').addEventListener('click',()=>{
       usernameInput.value='';setState('empty');document.getElementById('filter-tabs').classList.add('hidden');
     });
@@ -587,33 +527,7 @@
       navU.textContent='@'+data.username;navU.classList.remove('hidden');
 
       // Overall badge
-      const ov=(data.overall||'safe').toLowerCase();
-      const badge=document.getElementById('ringkasan-status');
-      const ovText=ov==='safe'?'Safe ✨':ov==='warning'?'Agak shady 🤔':'Ke-ghost 😢';
-      badge.textContent=ovText;badge.style.color=ov==='safe'?'var(--sage-400)':ov==='warning'?'#F0D48A':'var(--peach-400)';
-
-      // Ringkasan time
-      const ts=data.timestamp?new Date(data.timestamp):new Date();
-      document.getElementById('ringkasan-time').textContent=ts.toLocaleString('id-ID',{dateStyle:'short',timeStyle:'short'});
-
-      // Ringkasan layers (compact)
-      const layers=data.layers||data.tests||[];
-      const rl=document.getElementById('ringkasan-layers');
-      rl.innerHTML='';
-      layers.forEach(l=>{
-        const st=(l.status||'safe').toLowerCase();
-        const isClean=st==='safe';
-        const isDeep=DEEP_LAYERS.includes(l.name);
-        const div=document.createElement('div');
-        div.className='rounded-xl p-2 text-center';
-        div.style.background=st==='safe'?'var(--sage-200)':st==='warning'?'#FFF7E6':'var(--peach-200)';
-        div.innerHTML='<div class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">'+escapeHtml(l.name)+'</div>'
-          +'<div class="text-xs font-extrabold mt-1" style="color:'+(isClean?'var(--sage-400)':st==='warning'?'#8A6410':'var(--peach-400)')+'">'+(isClean?'Clean ✅':st==='warning'?'Waspada ⚠️':'Banned ❌')+'</div>'
-          +(isDeep?'<div class="text-[9px] font-medium mt-0.5" style="color:var(--text-muted);opacity:.6">'+(currentLang==='id'?'Data terbatas':'Limited data')+'</div>':'');
-        rl.appendChild(div);
-      });
-
-      // Grok hint
+      const ov=(data.overall||'safe').toLowerCase();      // Grok hint
       const hasIssue=layers.some(l=>l.status==='banned'||l.status==='warning');
       document.getElementById('grok-hint').classList.toggle('hidden',!hasIssue);
 
@@ -704,18 +618,6 @@
     }
     document.getElementById('carousel-prev').addEventListener('click',()=>goCarousel(carouselIdx-1));
     document.getElementById('carousel-next').addEventListener('click',()=>goCarousel(carouselIdx+1));
-
-    // === PLAYBOOK ===
-    function openPlaybook(){
-      const c=document.getElementById('playbook-content');c.innerHTML='';
-      playbookSteps.forEach(s=>{
-        const d=document.createElement('div');d.className='rounded-2xl p-3.5 slide-up';d.style.background='var(--cream-100)';d.style.border='1.5px solid var(--border)';
-        d.innerHTML='<div class="font-extrabold text-sm" style="color:var(--cocoa-700)">'+escapeHtml(s.title)+'</div><p class="text-xs font-medium mt-1" style="color:var(--text-muted)">'+escapeHtml(s.desc)+'</p>';
-        c.appendChild(d);
-      });
-      openModal('playbook-modal');
-    }
-
     // === MEMORIZER ===
     function saveMemorizer(data){
       try{
