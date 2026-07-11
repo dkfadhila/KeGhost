@@ -860,16 +860,8 @@
     }
 
     function buildShareText(data) {
-      const u = data && data.username ? '@' + data.username : '';
-      const overall = ((data && data.overall) || 'safe').toLowerCase();
-      let vibe = 'AMAN';
-      if (overall === 'warning') vibe = 'WASPADA';
-      if (overall === 'banned') vibe = 'KENA GHOST';
-      // Caption pendek + link + emoji love / capybara / star
-      if (u) {
-        return `Cek shadowban X ${u}: ${vibe} ❤️🦫⭐\nhttps://keghost.vercel.app/`;
-      }
-      return `Cek shadowban X kamu di KeGhost ❤️🦫⭐\nhttps://keghost.vercel.app/`;
+      // Caption santai, ajak temen cek — bukan status teknis
+      return `Hey, akun kalian udah di cek belum? Coba cek di sini deh ❤️🦫⭐\nhttps://keghost.vercel.app/`;
     }
 
     function openComposeOnX(data) {
