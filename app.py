@@ -116,6 +116,10 @@ def init_db():
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )"""
     )
+    # Migration: add avatar_url column for /api/recent
+    cols = [r[1] for r in c.execute("PRAGMA table_info(checks)").fetchall()]
+    if "avatar_url" not in cols:
+        c.execute("ALTER TABLE checks ADD COLUMN avatar_url TEXT")
     conn.commit()
     conn.close()
 
@@ -308,7 +312,7 @@ def _author_screen(item: dict) -> str:
 
 def _metrics_of(posts: list) -> dict:
     if not posts:
-        return {"avg_views": 0, "avg_likes": 0, "avg_replies": 0, "avg_rts": 0, "reply_ratio": 0, "quote_ratio": 0}
+        return {"avg_views": 0, "avg_likes": 0, "avg_replies": 0, "avg_rts": 0, "avg_quotes": 0, "reply_ratio": 0, "quote_ratio": 0}
     views = likes = replies = rts = quotes = 0
     for p in posts:
         m = p.get("metrics") or {}
@@ -324,13 +328,14 @@ def _metrics_of(posts: list) -> dict:
         "avg_likes": likes / n,
         "avg_replies": replies / n,
         "avg_rts": rts / n,
+        "avg_quotes": quotes / n,
         "reply_ratio": (replies / max(views, 1)),
         "quote_ratio": (quotes / max(views, 1)),
         "total_views": views,
     }
 
 
-def _clamp(n: int, lo: int = 0, hi: int = 100) -> int:
+def _clamp(n, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, int(n)))
 
 
@@ -614,6 +619,7 @@ async def fetch_via_cookies(username: str) -> dict | None:
                 "from_own": [],
                 "people_own": [],
                 "bare_own": [],
+                "mentioned": [],
                 "hashtag": None,
                 "hashtag_own": [],
                 "source": {"engine": "fxtwitter", "account": "public", "note": "cookie graphql failed; public profile only"},
@@ -630,6 +636,7 @@ async def fetch_via_cookies(username: str) -> dict | None:
             "from_own": [],
             "people_own": [],
             "bare_own": [],
+            "mentioned": [],
             "hashtag": None,
             "hashtag_own": [],
             "source": {"engine": "x-cookie", "account": "env"},
@@ -682,6 +689,16 @@ async def fetch_via_cookies(username: str) -> dict | None:
     except Exception:
         people_own = []
 
+    # Bare username search (for INDEX layer)
+    try:
+        s_bare = await x_graphql(
+            "SearchTimeline",
+            {"rawQuery": username, "count": 10, "querySource": "typed_query", "product": "Latest"},
+        )
+        bare_own = [t for t in _extract_tweets_from_timeline(s_bare) if _author_screen(t) == username]
+    except Exception:
+        bare_own = []
+
     hashtag = None
     hashtag_own = []
     for p in posts:
@@ -701,6 +718,12 @@ async def fetch_via_cookies(username: str) -> dict | None:
         except Exception:
             hashtag_own = []
 
+    # Mentioned by others (for SUGGEST layer)
+    mentioned = [
+        t for t in (people_own + bare_own)
+        if username in ((t.get("text") or "").lower())
+    ]
+
     local_avatar = await cache_avatar(username, profile.get("avatar") or "")
     if local_avatar:
         profile["avatar"] = local_avatar
@@ -715,6 +738,7 @@ async def fetch_via_cookies(username: str) -> dict | None:
         "from_own": from_own,
         "people_own": people_own,
         "bare_own": bare_own,
+        "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
         "source": {
@@ -726,25 +750,92 @@ async def fetch_via_cookies(username: str) -> dict | None:
     }
 
 
-async def score_from_bundle(username: str, bundle: dict) -> dict:
-    """Shared scoring path for cookie/fxtwitter bundles."""
+# ============================================================
+# 8-LAYER AUDIT SYSTEM
+# ============================================================
+# Layers:
+#   1. PROFILE — does profile exist, is it protected/suspended, basic info
+#   2. SEARCH  — does from:username appear in search results
+#   3. SUGGEST — does @username appear in search/typeahead (mention visibility)
+#   4. QRT     — quote tweet visibility (check quote metrics on recent posts)
+#   5. SPAM    — spam pattern detection (repetitive content, link spam, mention spam)
+#   6. RANK    — engagement ranking (views vs followers ratio, like ratio)
+#   7. POST    — recent post visibility (do posts appear, are they indexable)
+#   8. INDEX   — search index presence (does username search return the account)
+#
+# Each layer: {name, status: "safe"|"warning"|"banned", confidence: 0-100, desc}
+# ============================================================
+
+
+def _layer(name: str, status: str, confidence, desc: str) -> dict:
+    return {"name": name, "status": status, "confidence": _clamp(confidence), "desc": desc}
+
+
+def _status_health(status: str, confidence: int) -> int:
+    """Convert layer status+confidence to 0-100 health score (higher = better)."""
+    if status == "safe":
+        return _clamp(72 + confidence // 5, 70, 98)
+    elif status == "warning":
+        return _clamp(42 + confidence // 5, 40, 68)
+    else:  # banned
+        return _clamp(33 - confidence // 6, 5, 35)
+
+
+def _spam_analysis(posts: list) -> dict:
+    """Detect spam patterns: repetitive content, link spam, mention spam."""
+    if not posts:
+        return {"dupe_ratio": 0.0, "link_ratio": 0.0, "mention_ratio": 0.0, "desc": "no posts", "n": 0}
+    texts = [(p.get("text") or "") for p in posts]
+    n = len(texts)
+    seen = set()
+    dupes = 0
+    for t in texts:
+        key = re.sub(r"\s+", " ", t.lower().strip())[:120]
+        if not key:
+            continue
+        if key in seen:
+            dupes += 1
+        seen.add(key)
+    link_posts = sum(1 for t in texts if "http://" in t or "https://" in t or "t.co" in t)
+    mention_posts = sum(1 for t in texts if t.startswith("@") or t.count("@") >= 3)
+    dupe_ratio = dupes / max(n, 1)
+    link_ratio = link_posts / max(n, 1)
+    mention_ratio = mention_posts / max(n, 1)
+    parts = []
+    if dupes:
+        parts.append(f"{dupes} dup post")
+    if link_posts:
+        parts.append(f"{link_posts} post dgn link")
+    if mention_posts:
+        parts.append(f"{mention_posts} post mention-heavy")
+    desc = ", ".join(parts) if parts else "bersih"
+    return {
+        "dupe_ratio": dupe_ratio,
+        "link_ratio": link_ratio,
+        "mention_ratio": mention_ratio,
+        "desc": desc,
+        "n": n,
+    }
+
+
+def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
+    """
+    Run the 8-layer audit on a data bundle (shared by agentx + cookie paths).
+    Returns the full result dict: layers, overall, metrics, profile, recent_posts, probes, source, timestamp.
+    """
+    # --- Not found / suspended ---
     if bundle.get("not_found") or not bundle.get("profile"):
-        return {
-            "username": username,
-            "overall": "banned",
-            "metrics": {"search": 0, "reply": 0, "quote": 0, "engagement": 0},
-            "tests": [
-                {"name": "Search Ban", "status": "banned", "confidence": 95, "desc": "Akun tidak ketemu di X"},
-                {"name": "Ghost Ban", "status": "banned", "confidence": 90, "desc": "Profil tidak bisa dibaca observer"},
-                {"name": "Reply Ban", "status": "banned", "confidence": 80, "desc": "Tidak ada data reply"},
-                {"name": "Quote Ban", "status": "banned", "confidence": 80, "desc": "Tidak ada data quote"},
-                {"name": "Typeahead Ban", "status": "banned", "confidence": 90, "desc": "Username tidak resolve"},
-                {"name": "Hashtag Ban", "status": "warning", "confidence": 50, "desc": "Tidak bisa diuji (profil hilang)"},
-            ],
-            "profile": None,
-            "source": bundle.get("source") or {"engine": "x-cookie"},
-            "timestamp": datetime.now().isoformat(),
-        }
+        layers = [
+            _layer("PROFILE", "banned", 95, "Akun tidak ketemu / suspended di X"),
+            _layer("SEARCH", "banned", 90, "Tidak bisa diuji — profil hilang"),
+            _layer("SUGGEST", "banned", 85, "Username tidak resolve di typeahead"),
+            _layer("QRT", "banned", 75, "Tidak ada data quote"),
+            _layer("SPAM", "warning", 40, "Tidak bisa diuji — profil hilang"),
+            _layer("RANK", "banned", 80, "Tidak ada data engagement"),
+            _layer("POST", "banned", 90, "Tidak ada post terlihat"),
+            _layer("INDEX", "banned", 88, "Akun tidak ada di search index"),
+        ]
+        return _assemble_result(username, layers, None, [], bundle, sources, _metrics_of([]))
 
     profile = bundle["profile"]
     posts = bundle.get("posts") or []
@@ -753,101 +844,161 @@ async def score_from_bundle(username: str, bundle: dict) -> dict:
     bare_own = bundle.get("bare_own") or []
     hashtag = bundle.get("hashtag")
     hashtag_own = bundle.get("hashtag_own") or []
-    sources = bundle.get("source") or {"engine": "x-cookie"}
 
-    tests = []
+    mentioned = bundle.get("mentioned")
+    if mentioned is None:
+        mentioned = list(people_own + bare_own)
+
     mstats = _metrics_of(posts)
     avg_views = mstats.get("avg_views") or 0
+    avg_likes = mstats.get("avg_likes") or 0
+    avg_quotes = mstats.get("avg_quotes") or 0
     followers = max(profile.get("followers") or 0, 1)
     expected_floor = max(20, followers * 0.002)
+    is_protected = bool(profile.get("protected"))
+    has_posts = len(posts) > 0
+    has_from = len(from_own) > 0
 
-    # Search
-    if profile.get("protected"):
-        tests.append({"name": "Search Ban", "status": "warning", "confidence": 40, "desc": "Akun protected — search terbatas secara normal"})
-        search_status, search_score = "warning", 55
-    elif len(posts) == 0 and not from_own:
-        tests.append({"name": "Search Ban", "status": "warning", "confidence": 45, "desc": "Tidak ada post publik terbaru untuk diuji di search"})
-        search_status, search_score = "warning", 50
-    elif len(from_own) >= 1:
-        tests.append({"name": "Search Ban", "status": "safe", "confidence": _clamp(10 + len(from_own) * 8, 8, 25), "desc": f"Post muncul di search from:{username} ({len(from_own)} hit)"})
-        search_status, search_score = "safe", _clamp(70 + len(from_own) * 5, 70, 98)
-    elif len(posts) >= 1:
-        # search endpoint maybe dead; posts exist
-        tests.append({"name": "Search Ban", "status": "warning", "confidence": 50, "desc": "Post ada tapi search probe terbatas di host ini"})
-        search_status, search_score = "warning", 58
+    # --- Layer 1: PROFILE ---
+    if is_protected:
+        L1 = _layer("PROFILE", "warning", 60, "Akun protected — visibilitas terbatas by design")
     else:
-        tests.append({"name": "Search Ban", "status": "banned", "confidence": 82, "desc": f"Post ada ({len(posts)}) tapi from:{username} kosong di search"})
-        search_status, search_score = "banned", 18
+        L1 = _layer("PROFILE", "safe", 92, "Profil ada dan publik")
 
-    # Ghost
-    if len(posts) == 0:
-        tests.append({"name": "Ghost Ban", "status": "warning", "confidence": 40, "desc": "Tidak ada post untuk ukur jangkauan"})
-        ghost_score = 50
-    elif avg_views < expected_floor and search_status == "banned":
-        tests.append({"name": "Ghost Ban", "status": "banned", "confidence": 78, "desc": f"Views rata-rata sangat rendah ({int(avg_views)}) vs followers {followers}"})
-        ghost_score = 22
+    # --- Layer 2: SEARCH — from:username appears in search ---
+    if is_protected:
+        L2 = _layer("SEARCH", "warning", 50, "Protected — from: search terbatas secara normal")
+    elif not has_posts and not has_from:
+        L2 = _layer("SEARCH", "warning", 45, "Tidak ada post publik terbaru untuk diuji di search")
+    elif has_from:
+        L2 = _layer("SEARCH", "safe", _clamp(80 + len(from_own) * 3, 80, 97),
+                     f"from:{username} muncul di search ({len(from_own)} hit)")
+    elif has_posts:
+        L2 = _layer("SEARCH", "banned", _clamp(82 - len(posts) * 2, 72, 88),
+                     f"Post ada ({len(posts)}) tapi from:{username} kosong — search suggestion ban")
+    else:
+        L2 = _layer("SEARCH", "warning", 50, "Sampel tipis — tidak bisa konfirmasi")
+
+    # --- Layer 3: SUGGEST — @username mention visibility / typeahead ---
+    mention_hits = len(people_own) + len([m for m in mentioned if _author_screen(m) != username])
+    if mention_hits >= 1:
+        L3 = _layer("SUGGEST", "safe", _clamp(78 + mention_hits * 3, 78, 95),
+                     f"@{username} muncul di mention search ({mention_hits} hit)")
+    elif has_from:
+        L3 = _layer("SUGGEST", "safe", 72, "Username resolve lewat search observer")
+    elif is_protected:
+        L3 = _layer("SUGGEST", "warning", 50, "Protected — mention search terbatas")
+    elif has_posts:
+        L3 = _layer("SUGGEST", "warning", 55, "Profil ada tapi @mention tidak muncul di search surface")
+    else:
+        L3 = _layer("SUGGEST", "warning", 45, "Sampel tipis — tidak bisa konfirmasi typeahead")
+
+    # --- Layer 4: QRT — quote tweet visibility ---
+    if not has_posts:
+        L4 = _layer("QRT", "warning", 40, "Tidak ada sampel post untuk cek quote metrics")
+    elif avg_quotes > 0:
+        L4 = _layer("QRT", "safe", _clamp(75 + min(avg_quotes * 5, 20), 75, 95),
+                     f"Quote metrics normal (avg {avg_quotes:.1f} quote/post)")
+    elif avg_views > 500 and not has_from:
+        L4 = _layer("QRT", "banned", 72, "Views ada tapi quote stuck 0 + search lemah — quote ban")
+    elif avg_views > 2000:
+        L4 = _layer("QRT", "warning", 55, "Quote kosong meski views lumayan — mungkin partial limit")
+    else:
+        L4 = _layer("QRT", "safe", 70, "Quote visibility terlihat normal (views rendah, wajar quote kecil)")
+
+    # --- Layer 5: SPAM — spam pattern detection ---
+    spam = _spam_analysis(posts)
+    if not has_posts:
+        L5 = _layer("SPAM", "warning", 35, "Tidak ada post untuk analisis spam")
+    elif spam["dupe_ratio"] >= 0.5 or (spam["link_ratio"] >= 0.8 and spam["mention_ratio"] >= 0.5):
+        L5 = _layer("SPAM", "banned", _clamp(70 + int(spam["dupe_ratio"] * 20), 70, 90),
+                     f"Pola spam terdeteksi: {spam['desc']}")
+    elif spam["dupe_ratio"] >= 0.3 or spam["link_ratio"] >= 0.6 or spam["mention_ratio"] >= 0.4:
+        L5 = _layer("SPAM", "warning", _clamp(55 + int(spam["dupe_ratio"] * 15), 55, 70),
+                     f"Sinyal spam moderat: {spam['desc']}")
+    else:
+        L5 = _layer("SPAM", "safe", 85, "Tidak ada pola spam yang menonjol")
+
+    # --- Layer 6: RANK — engagement ranking ---
+    like_ratio = avg_likes / max(avg_views, 1)
+    view_follower_ratio = avg_views / followers
+    if not has_posts:
+        L6 = _layer("RANK", "warning", 40, "Tidak ada post untuk ukur engagement")
+    elif avg_views < expected_floor and not has_from:
+        L6 = _layer("RANK", "banned",
+                     _clamp(70 + int((expected_floor - avg_views) / max(expected_floor, 1) * 15), 70, 88),
+                     f"Views sangat rendah ({int(avg_views)}) vs followers {followers} — rank ditekan")
     elif avg_views < expected_floor:
-        tests.append({"name": "Ghost Ban", "status": "warning", "confidence": 60, "desc": f"Views rata-rata rendah ({int(avg_views)}) — mungkin partial limit"})
-        ghost_score = 48
+        L6 = _layer("RANK", "warning",
+                     _clamp(55 + int(avg_views / max(expected_floor, 1) * 10), 50, 68),
+                     f"Views rendah ({int(avg_views)}) — mungkin partial limit")
+    elif like_ratio < 0.005 and avg_views > 1000:
+        L6 = _layer("RANK", "warning", 58,
+                     f"Like ratio sangat rendah ({like_ratio:.4f}) — engagement lemah")
     else:
-        tests.append({"name": "Ghost Ban", "status": "safe", "confidence": 12, "desc": f"Post punya jangkauan wajar (avg views {int(avg_views)})"})
-        ghost_score = _clamp(75 + min(avg_views / 1000, 20), 70, 97)
+        L6 = _layer("RANK", "safe", _clamp(78 + min(view_follower_ratio * 10, 18), 75, 96),
+                     f"Engagement wajar (avg views {int(avg_views)}, like ratio {like_ratio:.3f})")
 
-    reply_posts = [p for p in posts if (p.get("text") or "").startswith("@")]
-    if len(posts) == 0:
-        tests.append({"name": "Reply Ban", "status": "warning", "confidence": 35, "desc": "Tidak ada sampel reply"})
-        reply_score = 50
-    elif len(reply_posts) >= 2 and mstats.get("avg_replies", 0) < 1 and avg_views < expected_floor:
-        tests.append({"name": "Reply Ban", "status": "banned", "confidence": 70, "desc": "Banyak reply tapi hampir tidak ada engagement balik"})
-        reply_score = 25
+    # --- Layer 7: POST — recent post visibility / indexability ---
+    if not has_posts:
+        L7 = _layer("POST", "warning", 45, "Tidak ada post terbaru terlihat")
+    elif has_from:
+        L7 = _layer("POST", "safe", _clamp(80 + len(from_own) * 2, 80, 96),
+                     f"Post terlihat & terindeks ({len(posts)} post, {len(from_own)} di search)")
+    elif is_protected:
+        L7 = _layer("POST", "warning", 50, "Protected — post visibility terbatas")
     else:
-        tests.append({"name": "Reply Ban", "status": "safe", "confidence": 15, "desc": "Tidak ada sinyal reply ban yang kuat"})
-        reply_score = 86
+        L7 = _layer("POST", "banned", _clamp(72 + min(len(posts) * 2, 15), 72, 85),
+                     f"Post ada ({len(posts)}) tapi tidak muncul di search — ghost/index ban")
 
-    avg_quotes = 0
-    if posts:
-        avg_quotes = sum(int((p.get("metrics") or {}).get("quotes") or 0) for p in posts) / len(posts)
-    if len(posts) == 0:
-        tests.append({"name": "Quote Ban", "status": "warning", "confidence": 35, "desc": "Tidak ada sampel quote"})
-        quote_score = 50
-    elif avg_quotes == 0 and avg_views > 500 and search_status == "banned":
-        tests.append({"name": "Quote Ban", "status": "banned", "confidence": 68, "desc": "Views ada tapi quote stuck di 0 + search lemah"})
-        quote_score = 28
+    # --- Layer 8: INDEX — search index presence ---
+    if len(bare_own) >= 1:
+        L8 = _layer("INDEX", "safe", _clamp(78 + len(bare_own) * 3, 78, 95),
+                     f"Username muncul di search index ({len(bare_own)} hit)")
+    elif has_from:
+        L8 = _layer("INDEX", "safe", 74, "Akun terindeks (terlihat lewat from: search)")
+    elif is_protected:
+        L8 = _layer("INDEX", "warning", 50, "Protected — index terbatas")
+    elif has_posts:
+        L8 = _layer("INDEX", "banned", _clamp(70 + min(len(posts) * 2, 15), 70, 85),
+                     "Profil ada tapi tidak muncul di search index — deindex")
     else:
-        tests.append({"name": "Quote Ban", "status": "safe", "confidence": 14, "desc": "Quote visibility terlihat normal"})
-        quote_score = 88
+        L8 = _layer("INDEX", "warning", 45, "Tidak bisa konfirmasi index presence")
 
-    surface_hits = len(people_own) + len(bare_own) + len(from_own)
-    if surface_hits >= 1 or profile:
-        tests.append({"name": "Typeahead Ban", "status": "safe", "confidence": 12, "desc": "Username/profil resolve lewat observer"})
-        type_score = 90
-    else:
-        tests.append({"name": "Typeahead Ban", "status": "warning", "confidence": 48, "desc": "Sinyal typeahead lemah"})
-        type_score = 55
+    layers = [L1, L2, L3, L4, L5, L6, L7, L8]
+    return _assemble_result(username, layers, profile, posts, bundle, sources, mstats)
 
-    if not hashtag:
-        tests.append({"name": "Hashtag Ban", "status": "safe", "confidence": 20, "desc": "Tidak ada hashtag di post terbaru — skip ketat, default aman"})
-    elif len(hashtag_own) >= 1:
-        tests.append({"name": "Hashtag Ban", "status": "safe", "confidence": 10, "desc": f"Post muncul di search {hashtag}"})
-    else:
-        tests.append({"name": "Hashtag Ban", "status": "banned", "confidence": 72, "desc": f"Punya hashtag {hashtag} tapi tidak muncul di hasil search tag itu"})
 
-    banned_count = sum(1 for t in tests if t["status"] == "banned")
-    warn_count = sum(1 for t in tests if t["status"] == "warning")
+def _assemble_result(username: str, layers: list, profile, posts: list,
+                     bundle: dict, sources: dict, mstats: dict) -> dict:
+    """Assemble final result dict from 8 layers + raw data."""
+    banned_count = sum(1 for l in layers if l["status"] == "banned")
+    warn_count = sum(1 for l in layers if l["status"] == "warning")
     if banned_count >= 3:
         overall = "banned"
-    elif banned_count >= 1 or warn_count >= 2:
+    elif banned_count >= 1 or warn_count >= 3:
         overall = "warning"
     else:
         overall = "safe"
 
-    if avg_views <= 0:
-        eng = 20 if not posts else 35
-    else:
-        eng = _clamp(30 + min(avg_views / 50, 50) + min((mstats.get("avg_likes") or 0) / 5, 20), 10, 98)
+    # Map layers to legacy metrics dict (backward compat for DB + history endpoint)
+    by_name = {l["name"]: l for l in layers}
+    metrics = {
+        "search": _status_health(by_name.get("SEARCH", {}).get("status", "warning"),
+                                  by_name.get("SEARCH", {}).get("confidence", 50)),
+        "reply": _status_health(by_name.get("SUGGEST", {}).get("status", "warning"),
+                                 by_name.get("SUGGEST", {}).get("confidence", 50)),
+        "quote": _status_health(by_name.get("QRT", {}).get("status", "warning"),
+                                 by_name.get("QRT", {}).get("confidence", 50)),
+        "engagement": _status_health(by_name.get("RANK", {}).get("status", "warning"),
+                                      by_name.get("RANK", {}).get("confidence", 50)),
+    }
 
+    avg_views = mstats.get("avg_views") or 0
+
+    # Recent posts summary for UI
     recent = []
-    for p in posts[:5]:
+    for p in (posts or [])[:5]:
         mm = p.get("metrics") or {}
         recent.append({
             "id": str(p.get("id") or ""),
@@ -861,21 +1012,17 @@ async def score_from_bundle(username: str, bundle: dict) -> dict:
     return {
         "username": username,
         "overall": overall,
-        "metrics": {
-            "search": search_score if search_status != "banned" else _clamp(search_score, 5, 35),
-            "reply": reply_score,
-            "quote": quote_score,
-            "engagement": eng,
-        },
-        "tests": tests,
+        "metrics": metrics,
+        "layers": layers,
+        "tests": layers,  # backward compat alias for old frontend
         "profile": profile,
         "recent_posts": recent,
         "probes": {
-            "posts_count": len(posts),
-            "from_search_hits": len(from_own),
-            "mention_search_hits": len(people_own) + len(bare_own),
-            "hashtag": hashtag,
-            "hashtag_hits": len(hashtag_own),
+            "posts_count": len(posts or []),
+            "from_search_hits": len(bundle.get("from_own") or []),
+            "mention_search_hits": len(bundle.get("people_own") or []) + len(bundle.get("bare_own") or []),
+            "hashtag": bundle.get("hashtag"),
+            "hashtag_hits": len(bundle.get("hashtag_own") or []),
             "avg_views": int(avg_views),
         },
         "source": sources,
@@ -885,9 +1032,8 @@ async def score_from_bundle(username: str, bundle: dict) -> dict:
 
 async def check_with_agentx(username: str) -> dict:
     """
-    Real-ish visibility check via AgentX.
-    Uses profile + posts + search probes. Not a perfect oracle for every ban type,
-    but grounded in live X data from the observer account.
+    Real-ish visibility check via AgentX + cookie GraphQL fallback.
+    Runs the 8-layer audit on live X data from the observer account.
     """
     username = username.lower().replace("@", "").strip()
     sources = {"engine": "agentx", "account": AGENTX_ACCOUNT}
@@ -897,7 +1043,7 @@ async def check_with_agentx(username: str) -> dict:
         bundle = await fetch_via_cookies(username)
         if bundle is None:
             raise RuntimeError("AgentX binary missing and TWITTER_AUTH_TOKEN/CT0 not set")
-        return await score_from_bundle(username, bundle)
+        return audit_8_layers(username, bundle, bundle.get("source") or sources)
 
     # 1) Profile
     user_env = await run_agentx("user", username)
@@ -905,38 +1051,35 @@ async def check_with_agentx(username: str) -> dict:
         err = (user_env.get("error") or {})
         code = err.get("code") or "api_error"
         msg = err.get("message") or "failed to fetch user"
-        # IMPORTANT: only treat real missing users as banned.
-        # Do NOT match generic "not found" (e.g. "agentx binary not found").
+        # Only treat real missing users as banned.
         if code in ("not_found", "user_not_found"):
-            return {
-                "username": username,
-                "overall": "banned",
-                "metrics": {"search": 0, "reply": 0, "quote": 0, "engagement": 0},
-                "tests": [
-                    {"name": "Search Ban", "status": "banned", "confidence": 95, "desc": "Akun tidak ketemu di X"},
-                    {"name": "Ghost Ban", "status": "banned", "confidence": 90, "desc": "Profil tidak bisa dibaca observer"},
-                    {"name": "Reply Ban", "status": "banned", "confidence": 80, "desc": "Tidak ada data reply"},
-                    {"name": "Quote Ban", "status": "banned", "confidence": 80, "desc": "Tidak ada data quote"},
-                    {"name": "Typeahead Ban", "status": "banned", "confidence": 90, "desc": "Username tidak resolve"},
-                    {"name": "Hashtag Ban", "status": "warning", "confidence": 50, "desc": "Tidak bisa diuji (profil hilang)"},
-                ],
+            not_found_bundle = {
+                "not_found": True,
                 "profile": None,
+                "posts": [],
+                "from_own": [],
+                "people_own": [],
+                "bare_own": [],
+                "mentioned": [],
+                "hashtag": None,
+                "hashtag_own": [],
                 "source": sources,
-                "error": msg,
-                "timestamp": datetime.now().isoformat(),
             }
-        # auth / network / missing binary → try cookie HTTP fallback below
+            result = audit_8_layers(username, not_found_bundle, sources)
+            result["error"] = msg
+            return result
+        # auth / network / missing binary → try cookie HTTP fallback
         if code in ("missing_binary", "spawn_error", "empty_output", "timeout", "api_error", "not_authenticated"):
             cookie_bundle = await fetch_via_cookies(username)
             if cookie_bundle is not None:
-                return await score_from_bundle(username, cookie_bundle)
+                return audit_8_layers(username, cookie_bundle, cookie_bundle.get("source") or sources)
         raise RuntimeError(f"live X fetch failed: {code}: {msg}")
 
     user = user_env.get("data") or {}
     profile = build_profile(user)
     sources["rateLimit"] = user_env.get("rateLimit")
 
-    # 2) Posts + search probes + avatar cache (temp 1 menit) in parallel
+    # 2) Posts + search probes + avatar cache in parallel
     posts_task = run_agentx("posts", username, "-n", "12")
     from_task = run_agentx("search", "--type", "Latest", f"from:{username}", "-n", "10")
     people_task = run_agentx("search", "--type", "Latest", f"@{username}", "-n", "10")
@@ -1001,281 +1144,19 @@ async def check_with_agentx(username: str) -> dict:
             tag_hits = []
         hashtag_own = authored_by_target(tag_hits)
 
-    # --- Score tests ---
-    tests = []
-    mstats = _metrics_of(posts)
-
-    # Search Ban: from:user should surface their posts if public + recent activity
-    if profile.get("protected"):
-        tests.append({
-            "name": "Search Ban",
-            "status": "warning",
-            "confidence": 40,
-            "desc": "Akun protected — search terbatas secara normal",
-        })
-        search_status = "warning"
-        search_score = 55
-    elif len(posts) == 0:
-        tests.append({
-            "name": "Search Ban",
-            "status": "warning",
-            "confidence": 45,
-            "desc": "Tidak ada post publik terbaru untuk diuji di search",
-        })
-        search_status = "warning"
-        search_score = 50
-    elif len(from_own) >= 1:
-        tests.append({
-            "name": "Search Ban",
-            "status": "safe",
-            "confidence": _clamp(10 + len(from_own) * 8, 8, 25),
-            "desc": f"Post muncul di search from:{username} ({len(from_own)} hit)",
-        })
-        search_status = "safe"
-        search_score = _clamp(70 + len(from_own) * 5, 70, 98)
-    else:
-        tests.append({
-            "name": "Search Ban",
-            "status": "banned",
-            "confidence": 82,
-            "desc": f"Post ada ({len(posts)}) tapi from:{username} kosong di search",
-        })
-        search_status = "banned"
-        search_score = 18
-
-    # Ghost Ban proxy: posts exist + very low views relative to followers, AND weak search
-    followers = max(profile.get("followers") or 0, 1)
-    avg_views = mstats["avg_views"]
-    # Expected rough floor: tiny fraction of followers
-    expected_floor = max(20, followers * 0.002)
-    if len(posts) == 0:
-        tests.append({
-            "name": "Ghost Ban",
-            "status": "warning",
-            "confidence": 40,
-            "desc": "Tidak ada post untuk ukur jangkauan",
-        })
-        ghost_status = "warning"
-        ghost_score = 50
-    elif avg_views < expected_floor and search_status == "banned":
-        tests.append({
-            "name": "Ghost Ban",
-            "status": "banned",
-            "confidence": 78,
-            "desc": f"Views rata-rata sangat rendah ({int(avg_views)}) vs followers {followers}",
-        })
-        ghost_status = "banned"
-        ghost_score = 22
-    elif avg_views < expected_floor:
-        tests.append({
-            "name": "Ghost Ban",
-            "status": "warning",
-            "confidence": 60,
-            "desc": f"Views rata-rata rendah ({int(avg_views)}) — mungkin partial limit",
-        })
-        ghost_status = "warning"
-        ghost_score = 48
-    else:
-        tests.append({
-            "name": "Ghost Ban",
-            "status": "safe",
-            "confidence": _clamp(12 if avg_views > expected_floor * 5 else 22, 8, 30),
-            "desc": f"Post punya jangkauan wajar (avg views {int(avg_views)})",
-        })
-        ghost_status = "safe"
-        ghost_score = _clamp(75 + min(avg_views / 1000, 20), 70, 97)
-
-    # Reply Ban proxy: share of reply-looking posts + reply metrics
-    reply_posts = [p for p in posts if (p.get("text") or "").startswith("@")]
-    if len(posts) == 0:
-        tests.append({
-            "name": "Reply Ban",
-            "status": "warning",
-            "confidence": 35,
-            "desc": "Tidak ada sampel reply",
-        })
-        reply_status = "warning"
-        reply_score = 50
-    elif len(reply_posts) >= 2 and mstats["avg_replies"] < 1 and avg_views < expected_floor:
-        tests.append({
-            "name": "Reply Ban",
-            "status": "banned",
-            "confidence": 70,
-            "desc": "Banyak reply tapi hampir tidak ada engagement balik",
-        })
-        reply_status = "banned"
-        reply_score = 25
-    elif len(reply_posts) >= 1 and mstats["avg_views"] < expected_floor * 0.5:
-        tests.append({
-            "name": "Reply Ban",
-            "status": "warning",
-            "confidence": 55,
-            "desc": "Reply terlihat lemah jangkauannya",
-        })
-        reply_status = "warning"
-        reply_score = 52
-    else:
-        tests.append({
-            "name": "Reply Ban",
-            "status": "safe",
-            "confidence": 15,
-            "desc": "Tidak ada sinyal reply ban yang kuat",
-        })
-        reply_status = "safe"
-        reply_score = 86
-
-    # Quote Ban proxy: quote metrics on recent posts
-    avg_quotes = 0
-    if posts:
-        avg_quotes = sum(int((p.get("metrics") or {}).get("quotes") or 0) for p in posts) / len(posts)
-    if len(posts) == 0:
-        tests.append({
-            "name": "Quote Ban",
-            "status": "warning",
-            "confidence": 35,
-            "desc": "Tidak ada sampel quote",
-        })
-        quote_status = "warning"
-        quote_score = 50
-    elif avg_quotes == 0 and avg_views > 500 and search_status == "banned":
-        tests.append({
-            "name": "Quote Ban",
-            "status": "banned",
-            "confidence": 68,
-            "desc": "Views ada tapi quote stuck di 0 + search lemah",
-        })
-        quote_status = "banned"
-        quote_score = 28
-    elif avg_quotes == 0 and avg_views > 2000:
-        tests.append({
-            "name": "Quote Ban",
-            "status": "warning",
-            "confidence": 50,
-            "desc": "Quote metrics kosong meski views lumayan",
-        })
-        quote_status = "warning"
-        quote_score = 55
-    else:
-        tests.append({
-            "name": "Quote Ban",
-            "status": "safe",
-            "confidence": 14,
-            "desc": "Quote visibility terlihat normal",
-        })
-        quote_status = "safe"
-        quote_score = 88
-
-    # Typeahead Ban proxy: does @user / bare username surface the account in search?
-    surface_hits = len(people_own) + len(bare_own) + len([m for m in mentioned if _author_screen(m) == username])
-    # Also count if profile is resolvable (we already have profile) — typeahead often fails separately
-    if surface_hits >= 1 or len(from_own) >= 1:
-        tests.append({
-            "name": "Typeahead Ban",
-            "status": "safe",
-            "confidence": 12,
-            "desc": "Username/post ketemu lewat search observer",
-        })
-        type_status = "safe"
-        type_score = 90
-    elif profile and len(posts) > 0 and search_status == "banned":
-        tests.append({
-            "name": "Typeahead Ban",
-            "status": "banned",
-            "confidence": 75,
-            "desc": "Profil ada tapi hampir tidak muncul di search surface",
-        })
-        type_status = "banned"
-        type_score = 20
-    else:
-        tests.append({
-            "name": "Typeahead Ban",
-            "status": "warning",
-            "confidence": 48,
-            "desc": "Sinyal typeahead lemah / sampel tipis",
-        })
-        type_status = "warning"
-        type_score = 55
-
-    # Hashtag Ban
-    if not hashtag:
-        tests.append({
-            "name": "Hashtag Ban",
-            "status": "safe",
-            "confidence": 20,
-            "desc": "Tidak ada hashtag di post terbaru — skip ketat, default aman",
-        })
-        hash_status = "safe"
-        hash_score = 75
-    elif len(hashtag_own) >= 1:
-        tests.append({
-            "name": "Hashtag Ban",
-            "status": "safe",
-            "confidence": 10,
-            "desc": f"Post muncul di search {hashtag}",
-        })
-        hash_status = "safe"
-        hash_score = 92
-    else:
-        tests.append({
-            "name": "Hashtag Ban",
-            "status": "banned",
-            "confidence": 72,
-            "desc": f"Punya hashtag {hashtag} tapi tidak muncul di hasil search tag itu",
-        })
-        hash_status = "banned"
-        hash_score = 24
-
-    banned_count = sum(1 for t in tests if t["status"] == "banned")
-    warn_count = sum(1 for t in tests if t["status"] == "warning")
-    if banned_count >= 3:
-        overall = "banned"
-    elif banned_count >= 1 or warn_count >= 2:
-        overall = "warning"
-    else:
-        overall = "safe"
-
-    # Engagement metric from real views/likes
-    if avg_views <= 0:
-        eng = 20
-    else:
-        eng = _clamp(30 + min(avg_views / 50, 50) + min(mstats["avg_likes"] / 5, 20), 10, 98)
-
-    # Recent posts summary for UI
-    recent = []
-    for p in posts[:5]:
-        mm = p.get("metrics") or {}
-        recent.append({
-            "id": str(p.get("id") or ""),
-            "text": (p.get("text") or "")[:180],
-            "likes": int(mm.get("likes") or 0),
-            "views": int(mm.get("views") or 0),
-            "replies": int(mm.get("replies") or 0),
-            "createdAt": p.get("createdAt") or "",
-        })
-
-    return {
-        "username": username,
-        "overall": overall,
-        "metrics": {
-            "search": search_score if search_status != "banned" else _clamp(search_score, 5, 35),
-            "reply": reply_score,
-            "quote": quote_score,
-            "engagement": eng,
-        },
-        "tests": tests,
+    # Build bundle and run 8-layer audit
+    bundle = {
         "profile": profile,
-        "recent_posts": recent,
-        "probes": {
-            "posts_count": len(posts),
-            "from_search_hits": len(from_own),
-            "mention_search_hits": len(people_own) + len(bare_own),
-            "hashtag": hashtag,
-            "hashtag_hits": len(hashtag_own),
-            "avg_views": int(avg_views),
-        },
+        "posts": posts,
+        "from_own": from_own,
+        "people_own": people_own,
+        "bare_own": bare_own,
+        "mentioned": mentioned,
+        "hashtag": hashtag,
+        "hashtag_own": hashtag_own,
         "source": sources,
-        "timestamp": datetime.now().isoformat(),
     }
+    return audit_8_layers(username, bundle, sources)
 
 
 @app.post("/api/check")
@@ -1292,6 +1173,7 @@ async def api_check(request: CheckRequest):
                 "username": username,
                 "overall": "warning",
                 "metrics": {"search": 0, "reply": 0, "quote": 0, "engagement": 0},
+                "layers": [],
                 "tests": [],
                 "profile": None,
                 "error": f"Yah capybara-nya bingung nih: {e}",
@@ -1300,12 +1182,17 @@ async def api_check(request: CheckRequest):
             status_code=502,
         )
 
+    # Extract avatar_url for /api/recent
+    avatar_url = ""
+    if result.get("profile"):
+        avatar_url = result["profile"].get("avatar") or ""
+
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute(
-            """INSERT INTO checks (username, overall, search_vis, reply_rate, quote_rate, engagement, tests)
-                     VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO checks (username, overall, search_vis, reply_rate, quote_rate, engagement, tests, avatar_url)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 username,
                 result["overall"],
@@ -1313,7 +1200,8 @@ async def api_check(request: CheckRequest):
                 result["metrics"]["reply"],
                 result["metrics"]["quote"],
                 result["metrics"]["engagement"],
-                json.dumps(result["tests"]),
+                json.dumps(result["layers"]),
+                avatar_url,
             ),
         )
         conn.commit()
@@ -1346,6 +1234,34 @@ async def get_history(limit: int = 20):
     return history
 
 
+@app.get("/api/recent")
+async def get_recent():
+    """Return last 8 checked accounts: {username, overall, avatar_url, timestamp}."""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute(
+        "SELECT username, overall, avatar_url, timestamp "
+        "FROM checks ORDER BY timestamp DESC LIMIT 8"
+    )
+    rows = c.fetchall()
+    conn.close()
+
+    recent = []
+    for row in rows:
+        uname = row[0] or ""
+        avatar_url = row[2] or ""
+        # If avatar cache expired, construct a fresh path (serve_avatar will 404 if gone)
+        if not avatar_url and uname:
+            avatar_url = f"/api/avatar/{_safe_username(uname)}"
+        recent.append({
+            "username": uname,
+            "overall": row[1] or "warning",
+            "avatar_url": avatar_url,
+            "timestamp": row[3] or "",
+        })
+    return recent
+
+
 @app.get("/api/health")
 async def health():
     me = await run_agentx("me") if Path(AGENTX_BIN).exists() else {"ok": False, "error": {"code": "missing_binary", "message": "agentx binary not on this host"}}
@@ -1360,6 +1276,7 @@ async def health():
         "observer": (me.get("data") or {}).get("screenName") if me.get("ok") else None,
         "error": (me.get("error") or None) if not me.get("ok") else None,
         "vercel": ON_VERCEL,
+        "audit_layers": 8,
         "note": "On Vercel: TWITTER_AUTH_TOKEN + TWITTER_CT0 power cookie GraphQL fallback (no agentx binary). Local can use AgentX binary or the same env cookies.",
     }
 
