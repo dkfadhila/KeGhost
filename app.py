@@ -84,6 +84,95 @@ VIRTUALS_MODEL = os.environ.get(
 DEEP_CACHE: dict = {}
 DEEP_TTL_SEC = 600
 
+# --- Supabase (shared, persistent scan history) ---
+SUPABASE_URL = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+SUPABASE_SERVICE_KEY = (
+    os.environ.get("SUPABASE_SERVICE_KEY")
+    or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    or ""
+).strip()
+SUPABASE_ON = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
+
+def _sb_headers(extra: dict | None = None) -> dict:
+    h = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/json",
+    }
+    if extra:
+        h.update(extra)
+    return h
+
+
+async def sb_insert_scan(row: dict) -> None:
+    """Persist one scan to Supabase (shared history). Silent on failure."""
+    if not SUPABASE_ON:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/scans",
+                headers=_sb_headers({"Prefer": "return=minimal"}),
+                json=row,
+            )
+    except Exception:
+        pass
+
+
+async def sb_recent(limit: int = 5) -> list:
+    """Last N distinct-ish scans for the recent chips."""
+    if not SUPABASE_ON:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/scans"
+                f"?select=username,overall,avatar_url,created_at"
+                f"&order=created_at.desc&limit={int(limit)}",
+                headers=_sb_headers(),
+            )
+        if 200 <= r.status_code < 300:
+            return r.json() or []
+    except Exception:
+        pass
+    return []
+
+
+async def sb_history(limit: int = 40) -> list:
+    if not SUPABASE_ON:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/scans"
+                f"?select=id,username,overall,avatar_url,search_vis,reply_rate,quote_rate,engagement,created_at"
+                f"&order=created_at.desc&limit={int(limit)}",
+                headers=_sb_headers(),
+            )
+        if 200 <= r.status_code < 300:
+            return r.json() or []
+    except Exception:
+        pass
+    return []
+
+
+async def sb_scan_detail(scan_id: int) -> dict | None:
+    if not SUPABASE_ON:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/scans?select=*&id=eq.{int(scan_id)}&limit=1",
+                headers=_sb_headers(),
+            )
+        if 200 <= r.status_code < 300:
+            rows = r.json() or []
+            return rows[0] if rows else None
+    except Exception:
+        pass
+    return None
+
 
 def ensure_agentx_account_from_env() -> None:
     """Bootstrap agentx account from env cookies when binary is present."""
@@ -1207,6 +1296,21 @@ async def api_check(request: CheckRequest):
     if result.get("profile"):
         avatar_url = result["profile"].get("avatar") or ""
 
+    # Persist to Supabase (shared, permanent history — survives cold starts)
+    await sb_insert_scan(
+        {
+            "username": username,
+            "overall": result["overall"],
+            "search_vis": result["metrics"]["search"],
+            "reply_rate": result["metrics"]["reply"],
+            "quote_rate": result["metrics"]["quote"],
+            "engagement": result["metrics"]["engagement"],
+            "layers": result.get("layers") or [],
+            "profile": result.get("profile") or {},
+            "avatar_url": avatar_url,
+        }
+    )
+
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
@@ -1233,7 +1337,33 @@ async def api_check(request: CheckRequest):
 
 
 @app.get("/api/history")
-async def get_history(limit: int = 20):
+async def get_history(limit: int = 40):
+    # Prefer Supabase (shared history visible to all users)
+    rows_sb = await sb_history(limit)
+    if rows_sb:
+        history = []
+        for row in rows_sb:
+            uname = row.get("username") or ""
+            avatar_url = row.get("avatar_url") or ""
+            if not avatar_url and uname:
+                avatar_url = f"/api/avatar/{_safe_username(uname)}"
+            history.append(
+                {
+                    "id": row.get("id"),
+                    "username": uname,
+                    "overall": row.get("overall") or "warning",
+                    "avatar_url": avatar_url,
+                    "metrics": {
+                        "search": row.get("search_vis") or 0,
+                        "reply": row.get("reply_rate") or 0,
+                        "quote": row.get("quote_rate") or 0,
+                        "engagement": row.get("engagement") or 0,
+                    },
+                    "timestamp": row.get("created_at") or "",
+                }
+            )
+        return history
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT * FROM checks ORDER BY timestamp DESC LIMIT ?", (limit,))
@@ -1257,6 +1387,23 @@ async def get_history(limit: int = 20):
 @app.get("/api/recent")
 async def get_recent():
     """Return last 5 checked accounts: {username, overall, avatar_url, timestamp}."""
+    # Prefer Supabase (shared + persistent); fall back to local SQLite.
+    rows_sb = await sb_recent(5)
+    if rows_sb:
+        recent = []
+        for row in rows_sb:
+            uname = row.get("username") or ""
+            avatar_url = row.get("avatar_url") or ""
+            if not avatar_url and uname:
+                avatar_url = f"/api/avatar/{_safe_username(uname)}"
+            recent.append({
+                "username": uname,
+                "overall": row.get("overall") or "warning",
+                "avatar_url": avatar_url,
+                "timestamp": row.get("created_at") or "",
+            })
+        return recent
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
@@ -1280,6 +1427,29 @@ async def get_recent():
             "timestamp": row[3] or "",
         })
     return recent
+
+
+@app.get("/api/history-detail/{scan_id}")
+async def history_detail(scan_id: int):
+    """Full stored scan (layers + profile) so other users can view someone's analysis."""
+    row = await sb_scan_detail(scan_id)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {
+        "id": row.get("id"),
+        "username": row.get("username"),
+        "overall": row.get("overall") or "warning",
+        "metrics": {
+            "search": row.get("search_vis") or 0,
+            "reply": row.get("reply_rate") or 0,
+            "quote": row.get("quote_rate") or 0,
+            "engagement": row.get("engagement") or 0,
+        },
+        "layers": row.get("layers") or [],
+        "profile": row.get("profile") or {},
+        "timestamp": row.get("created_at") or "",
+        "from_history": True,
+    }
 
 
 @app.get("/api/health")
@@ -1332,6 +1502,94 @@ async def serve_asset(fname: str):
 
 class DeepRequest(BaseModel):
     username: str
+
+
+class ChatRequest(BaseModel):
+    username: str = ""
+    message: str
+    template: str = ""
+
+
+CHAT_TEMPLATES = {
+    "profile": "Kasih saran perbaikan buat profil X akun ini — bio, foto, nama, pinned. Apa yang bisa bikin lebih menarik & aman dari shadowban.",
+    "niche": "Analisis niche/topik akun ini. Saran positioning & konten apa yang cocok biar tumbuh dan engagement naik.",
+    "recover": "Akun ini kena sinyal pembatasan. Kasih langkah konkret recovery shadowban, urut prioritas.",
+    "growth": "Kasih strategi growth realistis buat akun ini — posting habit, engagement, jam posting, tipe konten.",
+    "content": "Kasih 5 ide konten spesifik yang cocok buat akun ini biar reach & interaksi naik tanpa kelihatan spam.",
+}
+
+
+def _chat_prompt(scan: dict, message: str) -> str:
+    p = scan.get("profile") or {}
+    layers = scan.get("layers") or []
+    layer_txt = ", ".join(
+        f"{l.get('name')}={l.get('status')}({l.get('confidence')}%)" for l in layers
+    ) or "belum ada data layer"
+    return (
+        "Kamu CapyAi 🦫 — asisten santai, ramah, ngasih saran soal akun X (Twitter). "
+        "Jawab dalam Bahasa Indonesia yang hangat tapi to-the-point. Pakai poin kalau perlu. "
+        "Jangan pakai format JSON, jawab natural seperti chat.\n\n"
+        f"DATA AKUN @{p.get('username') or scan.get('username') or '-'}:\n"
+        f"- Nama: {p.get('name') or '-'}\n"
+        f"- Bio: {p.get('bio') or '-'}\n"
+        f"- Followers: {p.get('followers') or 0} | Following: {p.get('following') or 0} | Posts: {p.get('tweets') or 0}\n"
+        f"- Status keseluruhan: {scan.get('overall') or '-'}\n"
+        f"- Layer shadowban: {layer_txt}\n\n"
+        f"PERTANYAAN USER:\n{message}\n\n"
+        "Jawab langsung, spesifik ke akun ini, maksimal ~180 kata."
+    )
+
+
+@app.post("/api/capy-chat")
+async def capy_chat(req: ChatRequest):
+    msg = (req.message or "").strip()
+    tmpl = (req.template or "").strip()
+    if tmpl and tmpl in CHAT_TEMPLATES:
+        msg = CHAT_TEMPLATES[tmpl] + (f"\n\nCatatan user: {msg}" if msg else "")
+    if not msg:
+        return JSONResponse({"error": "message required"}, status_code=400)
+
+    username = _safe_username(req.username)
+    scan = {"username": username, "profile": {}, "overall": "-", "layers": []}
+    if username:
+        try:
+            scan = await check_with_agentx(username)
+        except Exception:
+            pass  # chat still works without live data
+
+    prompt = _chat_prompt(scan, msg)
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(
+                VIRTUALS_URL,
+                headers={
+                    "Authorization": f"Bearer {VIRTUALS_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": VIRTUALS_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                },
+            )
+        if not (200 <= r.status_code < 300):
+            return JSONResponse(
+                {"error": f"CapyAi HTTP {r.status_code}"}, status_code=502
+            )
+        data = r.json()
+        content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
+
+    reply = (content or "").strip()
+    if reply.startswith("```"):
+        reply = re.sub(r"^```[a-zA-Z]*\n?", "", reply)
+        reply = re.sub(r"\n?```$", "", reply).strip()
+    return {
+        "reply": reply or "Capy lagi bingung, coba tanya lagi ya 🦫",
+        "username": username,
+        "profile": scan.get("profile") or {},
+        "timestamp": datetime.now().isoformat(),
+    }
 
 
 def _deep_prompt(payload: dict) -> str:

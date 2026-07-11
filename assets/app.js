@@ -18,6 +18,15 @@ const I18N={
     loadSub:"Sabar ya, lagi periksa 8 lapisan visibility",
     errTitle:"Yah, Capy bingung",
     tabAll:"Semua",tabBan:"Ban",tabMod:"Mod",tabClean:"Clean",
+    sumClean:"Aman",sumMod:"Perhatikan",sumBan:"Terbatas",
+    histTitle:"📜 Riwayat Scan",histSub:"Semua scan dari pengunjung — klik buat lihat hasilnya.",
+    histEmpty:"Belum ada riwayat. Jadilah yang pertama scan! 🦫",
+    chatTitle:"CapyAi 🦫",chatStatus:"Tanya apa aja soal akun X",
+    chatPh:"Tulis pesan buat Capy...",chatTargetPh:"target username",
+    chatGreet:"Hai! 🦫 Aku CapyAi. Tulis username X yang mau kamu tanyain di atas, terus pilih topik atau ketik pertanyaanmu.",
+    chatNeedUser:"Isi target username dulu ya di atas 🌿",
+    chatThinking:"Capy lagi mikir...",
+    tpl_profile:"Saran profilku",tpl_niche:"Saran niche",tpl_recover:"Cara recovery",tpl_growth:"Strategi growth",tpl_content:"Ide konten",
     deepBtn:"Deep Analysis pakai CapyAi",
     deepSub:"Powered by Anthropic Claude Opus 4.8 · analisis mendalam + 10 solusi",
     exploreTitle:"🌏 Eksplorasi",
@@ -50,6 +59,15 @@ const I18N={
     loadSub:"Hang on, checking 8 visibility layers",
     errTitle:"Oops, Capy is confused",
     tabAll:"All",tabBan:"Ban",tabMod:"Mod",tabClean:"Clean",
+    sumClean:"Safe",sumMod:"Watch",sumBan:"Limited",
+    histTitle:"📜 Scan History",histSub:"All scans from visitors — tap to view results.",
+    histEmpty:"No history yet. Be the first to scan! 🦫",
+    chatTitle:"CapyAi 🦫",chatStatus:"Ask anything about an X account",
+    chatPh:"Type a message for Capy...",chatTargetPh:"target username",
+    chatGreet:"Hi! 🦫 I'm CapyAi. Type the X username you want to ask about above, then pick a topic or type your question.",
+    chatNeedUser:"Fill in the target username above first 🌿",
+    chatThinking:"Capy is thinking...",
+    tpl_profile:"Profile tips",tpl_niche:"Niche advice",tpl_recover:"How to recover",tpl_growth:"Growth strategy",tpl_content:"Content ideas",
     deepBtn:"Deep Analysis with CapyAi",
     deepSub:"Powered by Anthropic Claude Opus 4.8 · deep analysis + 10 solutions",
     exploreTitle:"🌏 Explore",
@@ -142,17 +160,27 @@ function renderResult(data){
   ov.innerHTML=`<span class="em">${em}</span><div><b>${msg}</b></div>`;
 
   window.__layers=data.layers||data.tests||[];
-  renderGrid("all");
+  renderGrid();
   // reset deep panel
   $("#deepPanel").classList.remove("show");
   $("#deepPanel").innerHTML="";
   $("#deepBtn").disabled=false;
 }
 
-function renderGrid(filter){
+function renderGrid(){
   const layers=window.__layers||[];
+  // summary counts — always visible so section never looks empty
+  const cnt={safe:0,warning:0,banned:0};
+  layers.forEach(l=>{const s=l.status||"safe";cnt[s]=(cnt[s]||0)+1;});
+  const sum=$("#layerSummary");
+  if(sum){
+    sum.innerHTML=`
+      <div class="ls-pill safe"><span class="ls-num">${cnt.safe}</span><span class="ls-lbl">${t("sumClean")}</span></div>
+      <div class="ls-pill warning"><span class="ls-num">${cnt.warning}</span><span class="ls-lbl">${t("sumMod")}</span></div>
+      <div class="ls-pill banned"><span class="ls-num">${cnt.banned}</span><span class="ls-lbl">${t("sumBan")}</span></div>`;
+  }
   const g=$("#grid");g.innerHTML="";
-  layers.filter(l=>filter==="all"||l.status===filter).forEach((l,i)=>{
+  layers.forEach((l,i)=>{
     const st=l.status||"safe";
     const d=document.createElement("div");
     d.className="cell "+st;
@@ -164,13 +192,9 @@ function renderGrid(filter){
       <div class="conf"><i></i></div>
       <div class="cval">${l.confidence||0}%</div>`;
     g.appendChild(d);
-    requestAnimationFrame(()=>{setTimeout(()=>{d.querySelector(".conf i").style.width=(l.confidence||0)+"%";},i*60+120);});
+    requestAnimationFrame(()=>{setTimeout(()=>{const bar=d.querySelector(".conf i");if(bar)bar.style.width=(l.confidence||0)+"%";},i*60+120);});
   });
 }
-$$("#tabs button").forEach(b=>b.onclick=()=>{
-  $$("#tabs button").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active");renderGrid(b.dataset.f);
-});
 
 /* ---------- deep analysis ---------- */
 $("#deepBtn").onclick=async()=>{
@@ -323,6 +347,134 @@ $("#username").addEventListener("keydown",e=>{if(e.key==="Enter")scan(e.target.v
 
 function escapeHtml(s){return (""+(s??"")).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
+
+/* ---------- history drawer (shared) ---------- */
+function fmtTime(ts){
+  if(!ts) return "";
+  try{
+    const d=new Date(ts); if(isNaN(d)) return "";
+    const diff=(Date.now()-d.getTime())/1000;
+    if(diff<60) return LANG==="id"?"baru saja":"just now";
+    if(diff<3600) return Math.floor(diff/60)+"m";
+    if(diff<86400) return Math.floor(diff/3600)+"h";
+    if(diff<604800) return Math.floor(diff/86400)+"d";
+    return d.toLocaleDateString(LANG==="id"?"id-ID":"en-US",{day:"numeric",month:"short"});
+  }catch(e){return "";}
+}
+function openDrawer(){$("#historyOv").classList.add("show");$("#historyDrawer").classList.add("show");$("#historyDrawer").setAttribute("aria-hidden","false");loadHistory();}
+function closeDrawer(){$("#historyOv").classList.remove("show");$("#historyDrawer").classList.remove("show");$("#historyDrawer").setAttribute("aria-hidden","true");}
+$("#historyBtn").onclick=openDrawer;
+$("#historyClose").onclick=closeDrawer;
+$("#historyOv").onclick=closeDrawer;
+
+async function loadHistory(){
+  const box=$("#histList");
+  box.innerHTML=`<div class="hist-empty">…</div>`;
+  try{
+    const r=await fetch("/api/history?limit=50");const list=await r.json();
+    if(!Array.isArray(list)||!list.length){box.innerHTML=`<div class="hist-empty">${t("histEmpty")}</div>`;return;}
+    box.innerHTML="";
+    list.forEach(it=>{
+      const st=it.overall||"warning";
+      const ava=it.avatar_url||"/assets/logo.png";
+      const el=document.createElement("div");
+      el.className="hist-item";
+      el.innerHTML=`
+        <img src="${escapeAttr(ava)}" onerror="this.src='/assets/logo.png'" alt=""/>
+        <div class="hi-meta">
+          <div class="hi-name">@${escapeHtml(it.username||"")}</div>
+          <div class="hi-time">${escapeHtml(fmtTime(it.timestamp))}</div>
+        </div>
+        <span class="hi-badge ${st}">${st==="safe"?t("sumClean"):st==="banned"?t("sumBan"):t("sumMod")}</span>`;
+      el.onclick=()=>openHistoryDetail(it.id,it.username);
+      box.appendChild(el);
+    });
+  }catch(e){box.innerHTML=`<div class="hist-empty">${t("histEmpty")}</div>`;}
+}
+
+async function openHistoryDetail(id,uname){
+  closeDrawer();
+  show("stateLoading");
+  window.scrollTo({top:$(".search-card").offsetTop-20,behavior:"smooth"});
+  try{
+    const r=await fetch("/api/history-detail/"+encodeURIComponent(id));
+    if(!r.ok) throw new Error("not found");
+    const data=await r.json();
+    LAST=data;
+    renderResult(data);
+    show("result");
+  }catch(e){
+    // fallback: live re-scan
+    if(uname) scan(uname);
+    else{$("#errMsg").textContent=("history hilang 🍃");show("stateError");}
+  }
+}
+
+/* ---------- CapyAi chat ---------- */
+const CHAT_TPLS=["profile","niche","recover","growth","content"];
+let CHAT_BOOTED=false;
+function buildChatTemplates(){
+  const box=$("#chatTemplates");box.innerHTML="";
+  CHAT_TPLS.forEach(key=>{
+    const b=document.createElement("button");
+    b.className="tpl-chip";b.textContent=t("tpl_"+key);
+    b.onclick=()=>sendChat("",key);
+    box.appendChild(b);
+  });
+}
+function chatMsg(text,who){
+  const log=$("#chatLog");
+  const m=document.createElement("div");
+  m.className="msg "+who;
+  m.textContent=text;
+  log.appendChild(m);
+  log.scrollTop=log.scrollHeight;
+  return m;
+}
+function openChat(){
+  $("#chatOv").classList.add("show");$("#chatBox").classList.add("show");$("#chatBox").setAttribute("aria-hidden","false");
+  if(!CHAT_BOOTED){
+    buildChatTemplates();
+    chatMsg(t("chatGreet"),"capy");
+    CHAT_BOOTED=true;
+    // prefill target with last scanned username
+    if(LAST){const u=(LAST.profile&&LAST.profile.username)||LAST.username;if(u)$("#chatUser").value=u;}
+  }
+  setTimeout(()=>$("#chatInput").focus(),300);
+}
+function closeChat(){$("#chatOv").classList.remove("show");$("#chatBox").classList.remove("show");$("#chatBox").setAttribute("aria-hidden","true");}
+$("#capyFab").onclick=openChat;
+$("#chatClose").onclick=closeChat;
+$("#chatOv").onclick=closeChat;
+
+let CHAT_BUSY=false;
+async function sendChat(message,template){
+  if(CHAT_BUSY) return;
+  const uname=($("#chatUser").value||"").trim().replace(/^@/,"");
+  const msg=(message||$("#chatInput").value||"").trim();
+  if(!template && !msg) return;
+  if(!uname){chatMsg(t("chatNeedUser"),"capy");return;}
+  // show user's bubble
+  if(template && !msg) chatMsg(t("tpl_"+template),"me");
+  else chatMsg(msg,"me");
+  $("#chatInput").value="";
+  CHAT_BUSY=true;$("#chatSend").disabled=true;
+  const typing=chatMsg(t("chatThinking"),"typing");
+  try{
+    const r=await fetch("/api/capy-chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({username:uname,message:msg,template:template||""})});
+    const data=await r.json();
+    typing.remove();
+    if(data.error) throw new Error(data.error);
+    chatMsg(data.reply||"🦫","capy");
+  }catch(e){
+    typing.remove();
+    chatMsg(t("deepErr"),"capy");
+  }finally{CHAT_BUSY=false;$("#chatSend").disabled=false;$("#chatInput").focus();}
+}
+$("#chatSend").onclick=()=>sendChat();
+$("#chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")sendChat();});
+
 
 /* boot */
 applyTheme();applyLang();buildSlides();loadRecent();
