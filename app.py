@@ -1742,6 +1742,13 @@ async def health():
         "error": (me.get("error") or None) if not me.get("ok") else None,
         "vercel": ON_VERCEL,
         "audit_layers": 8,
+        "cline": {
+            "cookie_set": bool(CLINE_COOKIE),
+            "bearer_set": bool(CLINE_API_KEY),
+            "chat_model": CLINE_CHAT_MODEL,
+            "deep_model": CLINE_DEEP_MODEL,
+            "virtuals_fallback": bool(DEEP_FALLBACK_TO_VIRTUALS and VIRTUALS_KEY),
+        },
         "note": "On Vercel: TWITTER_AUTH_TOKEN + TWITTER_CT0 power cookie GraphQL fallback (no agentx binary). Local can use AgentX binary or the same env cookies.",
     }
 
