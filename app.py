@@ -426,22 +426,41 @@ async def _virtuals_chat(
     messages: list,
     *,
     timeout: float = 90.0,
+    max_retries: int = 2,
 ) -> str:
+    """Call Virtuals with retry on transient 5xx/429. Returns assistant text."""
     if not VIRTUALS_KEY:
         raise RuntimeError("VIRTUALS_KEY not set")
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.post(
-            VIRTUALS_URL,
-            headers={
-                "Authorization": f"Bearer {VIRTUALS_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "messages": messages},
-        )
-    if not (200 <= r.status_code < 300):
-        raise RuntimeError(f"Virtuals HTTP {r.status_code}: {r.text[:160]}")
-    data = r.json()
-    return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    last_err = "unknown"
+    for attempt in range(max_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(
+                    VIRTUALS_URL,
+                    headers={
+                        "Authorization": f"Bearer {VIRTUALS_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": model, "messages": messages},
+                )
+            if 200 <= r.status_code < 300:
+                data = r.json()
+                return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            if r.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                await asyncio.sleep(0.7 * (attempt + 1))
+                continue
+            last_err = f"Virtuals HTTP {r.status_code}: {r.text[:160]}"
+            break
+        except (httpx.TimeoutException, asyncio.TimeoutError) as e:
+            last_err = f"Virtuals timeout: {e}"
+            if attempt < max_retries:
+                await asyncio.sleep(0.7 * (attempt + 1))
+                continue
+            break
+        except Exception as e:
+            last_err = f"Virtuals error: {e}"
+            break
+    raise RuntimeError(last_err)
 
 
 def ensure_agentx_account_from_env() -> None:
