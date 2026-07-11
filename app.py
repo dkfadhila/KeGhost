@@ -1493,10 +1493,15 @@ async def serve_asset(fname: str):
         ".css": "text/css",
         ".json": "application/json",
     }.get(suf, "application/octet-stream")
+    # Short cache for code (versioned refs handle busting); long cache for media.
+    if suf in (".js", ".css"):
+        cache = "public, max-age=60, must-revalidate"
+    else:
+        cache = "public, max-age=86400"
     return FileResponse(
         path,
         media_type=media,
-        headers={"Cache-Control": "public, max-age=86400"},
+        headers={"Cache-Control": cache},
     )
 
 
