@@ -2,8 +2,11 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#FFF8F0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>KeGhost • Cek Ghost Ban X</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -235,13 +238,79 @@
     /* Hide until ready */
     .state-panel { display: none; }
     .state-panel.is-active { display: block; }
+
+    /* Mobile-first polish */
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      padding-left: max(0px, env(safe-area-inset-left));
+      padding-right: max(0px, env(safe-area-inset-right));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+    input, button, textarea { font-size: 16px; } /* no iOS zoom */
+    #btn-cek, #btn-share-x, #btn-share-img, #btn-download-img {
+      min-height: 48px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    @media (max-width: 640px) {
+      .float-bit { display: none; } /* less clutter on small screens */
+      .page-wrap { padding-left: 14px !important; padding-right: 14px !important; padding-top: 1.25rem !important; }
+      .search-row { flex-direction: column !important; }
+      .btn-cek { width: 100%; }
+      .metric-grid { grid-template-columns: 1fr 1fr !important; gap: 0.5rem !important; }
+      .tests-grid { grid-template-columns: 1fr !important; }
+      .profile-row { gap: 0.75rem !important; }
+      .profile-avatar-lg { width: 3.5rem !important; height: 3.5rem !important; }
+      .result-title { font-size: 1.6rem !important; }
+      .share-actions { flex-direction: column !important; }
+      .share-actions button { width: 100%; justify-content: center; }
+    }
+    /* Share card capture mode */
+    #share-card.capturing {
+      border-radius: 24px !important;
+      overflow: hidden;
+      background: #FFF8F0 !important;
+    }
+    #share-card .share-brand {
+      display: none;
+    }
+    #share-card.capturing .share-brand {
+      display: flex !important;
+    }
+    #share-card.capturing .no-capture {
+      display: none !important;
+    }
+    .share-preview-modal {
+      position: fixed; inset: 0; z-index: 80;
+      background: rgba(61, 50, 41, 0.45);
+      display: none; align-items: flex-end; justify-content: center;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+    .share-preview-modal.open { display: flex; }
+    .share-preview-sheet {
+      width: min(520px, 100%);
+      background: #FFFBF5;
+      border-radius: 24px;
+      border: 1.5px solid #E8D5C4;
+      box-shadow: 0 18px 50px rgba(107, 83, 68, 0.25);
+      padding: 16px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+    .share-preview-sheet img {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid #E8D5C4;
+      display: block;
+    }
   </style>
 </head>
 <body class="font-body">
   <!-- Floating cozy bits -->
   <div class="float-layer" id="float-layer" aria-hidden="true"></div>
 
-  <div class="relative z-10 max-w-[720px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
+  <div class="page-wrap relative z-10 max-w-[720px] mx-auto px-4 sm:px-5 py-8 sm:py-10">
 
     <!-- Header -->
     <header class="text-center mb-8 enter" style="animation-delay: 0.05s">
@@ -264,7 +333,7 @@
       <label for="username" class="block text-sm font-bold text-cocoa-700 mb-2.5">
         Username X / Twitter
       </label>
-      <div class="flex flex-col sm:flex-row gap-3">
+      <div class="search-row flex flex-col sm:flex-row gap-3">
         <div class="search-pill flex-1 flex items-center gap-2 bg-cream-100 border-[1.5px] border-cream-300 rounded-full px-4 py-1.5 transition-all">
           <span class="text-ink-500 font-bold text-lg">@</span>
           <input
@@ -330,10 +399,22 @@
 
       <!-- Results state -->
       <div id="state-results" class="state-panel fade-swap">
+        <div id="share-card" class="space-y-4">
+        <!-- brand bar (visible only when capturing screenshot) -->
+        <div class="share-brand items-center justify-between px-1 mb-1" style="display:none">
+          <div class="flex items-center gap-2">
+            <span style="font-size:1.4rem">🦫</span>
+            <div>
+              <div class="font-display text-lg font-bold text-cocoa-700 leading-none">KeGhost</div>
+              <div class="text-[11px] font-bold text-ink-500/70">Shadowban report</div>
+            </div>
+          </div>
+          <div class="text-[11px] font-extrabold text-cocoa-500">keghost · by PICA</div>
+        </div>
         <!-- Profile (AgentX) -->
         <div id="profile-card" class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-4 hidden">
-          <div class="flex items-start gap-4">
-            <img id="profile-avatar" src="" alt="" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-[3px] border-cream-300 shadow-card bg-cream-200" />
+          <div class="profile-row flex items-start gap-4">
+            <img id="profile-avatar" src="" alt="" class="profile-avatar-lg w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-[3px] border-cream-300 shadow-card bg-cream-200" crossorigin="anonymous" />
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
                 <div id="profile-name" class="font-display text-xl sm:text-2xl text-cocoa-700 font-bold truncate"></div>
@@ -357,14 +438,14 @@
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div class="text-xs font-bold uppercase tracking-wide text-ink-500/70">Hasil cek</div>
-              <div id="result-username" class="font-display text-3xl text-cocoa-700 font-bold mt-0.5"></div>
+              <div id="result-username" class="result-title font-display text-3xl text-cocoa-700 font-bold mt-0.5"></div>
               <div class="text-xs text-ink-500/70 mt-1 font-medium" id="check-time"></div>
             </div>
             <div id="overall-badge" class="inline-flex items-center gap-2 rounded-full px-4 py-2 font-extrabold text-sm shadow-card"></div>
           </div>
 
           <!-- Metrics -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+          <div class="metric-grid grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
             <div class="rounded-2xl bg-cream-100 border border-cream-300 p-3">
               <div class="text-[11px] font-bold text-ink-500/70 uppercase">Search</div>
               <div id="metric-search" class="font-display text-2xl text-cocoa-700 font-bold mt-0.5">—</div>
@@ -389,7 +470,7 @@
         </div>
 
         <!-- Test cards -->
-        <div id="test-results" class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"></div>
+        <div id="test-results" class="tests-grid grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"></div>
 
         <!-- Suggestions -->
         <div id="saran-wrap" class="surface rounded-[28px] shadow-soft p-5 sm:p-6 slide-up">
@@ -399,8 +480,45 @@
           </div>
           <div id="saran-panel" class="space-y-3"></div>
         </div>
+
+        <!-- share brand footer for capture -->
+        <div class="share-brand items-center justify-between px-2 pt-1" style="display:none">
+          <div class="text-xs font-bold text-ink-500/70">Made with 🦫 by PICA</div>
+          <div class="text-xs font-extrabold text-cocoa-500">x.com/peachymoo_</div>
+        </div>
+        </div><!-- /share-card -->
+
+        <!-- Share actions (not captured) -->
+        <div class="no-capture surface rounded-[28px] shadow-soft p-4 sm:p-5 mt-4">
+          <div class="font-display text-lg text-cocoa-700 font-bold mb-1">Share report ✨</div>
+          <p class="text-xs text-ink-500 font-medium mb-3">Screenshot hasil cek → share ke X sebagai gambar</p>
+          <div class="share-actions flex flex-col sm:flex-row gap-2.5">
+            <button id="btn-share-x" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-[#111] text-white font-extrabold px-5 py-3 shadow-pill">
+              <span>𝕏</span><span>Share ke X</span>
+            </button>
+            <button id="btn-download-img" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 hover:bg-cocoa-500 text-white font-extrabold px-5 py-3 shadow-pill">
+              <span>🖼️</span><span>Download gambar</span>
+            </button>
+          </div>
+          <p id="share-status" class="mt-2 text-xs font-bold text-ink-500/70 min-h-[1rem]"></p>
+        </div>
       </div>
     </section>
+
+    <!-- Share preview modal (mobile friendly) -->
+    <div id="share-modal" class="share-preview-modal" aria-hidden="true">
+      <div class="share-preview-sheet">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-display text-lg font-bold text-cocoa-700">Preview report</div>
+          <button type="button" id="btn-close-modal" class="text-sm font-extrabold text-ink-500 px-3 py-1 rounded-full bg-cream-200">Tutup</button>
+        </div>
+        <img id="share-preview-img" alt="KeGhost report preview" />
+        <div class="share-actions flex flex-col sm:flex-row gap-2.5 mt-3">
+          <button id="btn-share-preview-x" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-[#111] text-white font-extrabold px-5 py-3">Share ke X</button>
+          <button id="btn-share-preview-dl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-cocoa-400 text-white font-extrabold px-5 py-3">Download</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="text-center pb-6 enter" style="animation-delay: 0.35s">
@@ -574,6 +692,7 @@
     }
 
     function renderResults(data) {
+      lastResult = data;
       document.getElementById('result-username').textContent = '@' + data.username;
 
       // Profile card from AgentX
@@ -730,9 +849,156 @@
         .replace(/"/g, '&quot;');
     }
 
+
+    let lastResult = null;
+    let lastShareBlob = null;
+    let lastShareUrl = null;
+
+    function setShareStatus(msg) {
+      const el = document.getElementById('share-status');
+      if (el) el.textContent = msg || '';
+    }
+
+    function buildShareText(data) {
+      const u = data && data.username ? '@' + data.username : '@user';
+      const overall = (data && data.overall) || 'safe';
+      const label = overall === 'safe' ? 'AMAN' : overall === 'warning' ? 'WASPADA' : 'KENA GHOST';
+      const tests = (data && data.tests) || [];
+      const bad = tests.filter(t => t.status === 'banned' || t.status === 'warning')
+        .map(t => t.name.replace(' Ban',''))
+        .slice(0, 4);
+      const detail = bad.length ? (' · ' + bad.join(', ')) : ' · all clear';
+      return `KeGhost check ${u}: ${label}${detail}\nCek shadowban X kamu 🦫`;
+    }
+
+    async function captureReportImage() {
+      if (typeof html2canvas !== 'function') {
+        throw new Error('html2canvas belum ke-load');
+      }
+      const card = document.getElementById('share-card');
+      if (!card) throw new Error('share card missing');
+      card.classList.add('capturing');
+      // wait fonts/images
+      await new Promise(r => setTimeout(r, 80));
+      try {
+        const canvas = await html2canvas(card, {
+          backgroundColor: '#FFF8F0',
+          scale: Math.min(2, window.devicePixelRatio || 1.5),
+          useCORS: true,
+          allowTaint: false,
+          logging: false,
+          scrollX: 0,
+          scrollY: -window.scrollY
+        });
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/png', 0.95);
+        });
+        return { canvas, blob };
+      } finally {
+        card.classList.remove('capturing');
+      }
+    }
+
+    function openShareModal(blob) {
+      if (lastShareUrl) URL.revokeObjectURL(lastShareUrl);
+      lastShareBlob = blob;
+      lastShareUrl = URL.createObjectURL(blob);
+      const img = document.getElementById('share-preview-img');
+      img.src = lastShareUrl;
+      const modal = document.getElementById('share-modal');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeShareModal() {
+      const modal = document.getElementById('share-modal');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function downloadShareBlob(blob, username) {
+      const a = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      a.href = url;
+      a.download = `keghost-${username || 'report'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    async function shareToX(blob) {
+      const data = lastResult || {};
+      const text = buildShareText(data);
+      const file = new File([blob], `keghost-${data.username || 'report'}.png`, { type: 'image/png' });
+
+      // Mobile / modern: Web Share with image file
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'KeGhost Report',
+          text: text
+        });
+        setShareStatus('Ke-share lewat device share sheet ✨');
+        return;
+      }
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: 'KeGhost Report', text: text });
+        } catch (_) {}
+      }
+      // Fallback: download image + open X intent (user attaches image manually)
+      await downloadShareBlob(blob, data.username);
+      const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
+      window.open(intent, '_blank', 'noopener,noreferrer');
+      setShareStatus('Gambar di-download. Tempelin ke post X-nya ya 🦫');
+    }
+
+    async function handleShareX() {
+      try {
+        setShareStatus('Bikin screenshot dulu…');
+        const { blob } = await captureReportImage();
+        openShareModal(blob);
+        setShareStatus('Preview siap — share atau download');
+      } catch (e) {
+        setShareStatus('Gagal bikin gambar: ' + (e.message || e));
+      }
+    }
+
+    async function handleDownloadImg() {
+      try {
+        setShareStatus('Bikin screenshot…');
+        const { blob } = await captureReportImage();
+        await downloadShareBlob(blob, (lastResult && lastResult.username) || 'report');
+        setShareStatus('Gambar tersimpan 🖼️');
+      } catch (e) {
+        setShareStatus('Gagal download: ' + (e.message || e));
+      }
+    }
+
+
     // Boot
     window.addEventListener('DOMContentLoaded', () => {
       usernameInput.focus();
+      const btnShare = document.getElementById('btn-share-x');
+      const btnDl = document.getElementById('btn-download-img');
+      const btnClose = document.getElementById('btn-close-modal');
+      const btnPrevX = document.getElementById('btn-share-preview-x');
+      const btnPrevDl = document.getElementById('btn-share-preview-dl');
+      const modal = document.getElementById('share-modal');
+      if (btnShare) btnShare.addEventListener('click', handleShareX);
+      if (btnDl) btnDl.addEventListener('click', handleDownloadImg);
+      if (btnClose) btnClose.addEventListener('click', closeShareModal);
+      if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeShareModal(); });
+      if (btnPrevX) btnPrevX.addEventListener('click', async () => {
+        if (!lastShareBlob) return;
+        try { await shareToX(lastShareBlob); } catch (e) { setShareStatus(String(e.message || e)); }
+      });
+      if (btnPrevDl) btnPrevDl.addEventListener('click', async () => {
+        if (!lastShareBlob) return;
+        await downloadShareBlob(lastShareBlob, (lastResult && lastResult.username) || 'report');
+        setShareStatus('Gambar tersimpan 🖼️');
+      });
     });
   </script>
 </body>

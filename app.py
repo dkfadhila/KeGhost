@@ -22,11 +22,82 @@ AVATAR_DIR = Path("/tmp/keghost-avatars" if ON_VERCEL else BASE_DIR / ".avatar-c
 AVATAR_TTL_SEC = 60  # foto temp: 1 menit lalu hilang
 
 # AgentX config (cookies live in AGENTX_HOME/accounts.json — never commit)
-AGENTX_BIN = os.environ.get("AGENTX_BIN", str(Path(r"G:\Mirai Noa\agentx-src\agentx.exe")))
+# On Vercel: set TWITTER_AUTH_TOKEN + TWITTER_CT0 as Environment Variables
+
+def _load_dotenv():
+    env_path = BASE_DIR / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for raw in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except OSError:
+        pass
+
+
+_load_dotenv()
+
+AGENTX_BIN = os.environ.get(
+    "AGENTX_BIN",
+    str(Path(r"G:\Mirai Noa\agentx-src\agentx.exe")),
+)
 AGENTX_HOME = os.environ.get("AGENTX_HOME", str(BASE_DIR / ".agentx-home"))
 AGENTX_ACCOUNT = os.environ.get("AGENTX_ACCOUNT", "keghost")
+TWITTER_AUTH_TOKEN = (
+    os.environ.get("TWITTER_AUTH_TOKEN")
+    or os.environ.get("AUTH_TOKEN")
+    or os.environ.get("X_AUTH_TOKEN")
+    or ""
+).strip()
+TWITTER_CT0 = (
+    os.environ.get("TWITTER_CT0")
+    or os.environ.get("CT0")
+    or os.environ.get("X_CT0")
+    or ""
+).strip()
 
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_agentx_account_from_env() -> None:
+    """Bootstrap agentx account from env cookies when binary is present."""
+    if not TWITTER_AUTH_TOKEN or not TWITTER_CT0:
+        return
+    if not Path(AGENTX_BIN).exists():
+        return
+    Path(AGENTX_HOME).mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["AGENTX_HOME"] = AGENTX_HOME
+    try:
+        import subprocess
+        subprocess.run(
+            [
+                AGENTX_BIN,
+                "account",
+                "add",
+                "--name",
+                AGENTX_ACCOUNT,
+                "--auth-token",
+                TWITTER_AUTH_TOKEN,
+                "--ct0",
+                TWITTER_CT0,
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=20,
+        )
+    except Exception:
+        pass
+
+
+ensure_agentx_account_from_env()
 
 
 def init_db():
@@ -737,15 +808,19 @@ async def get_history(limit: int = 20):
 
 @app.get("/api/health")
 async def health():
-    me = await run_agentx("me")
+    me = await run_agentx("me") if Path(AGENTX_BIN).exists() else {"ok": False, "error": {"code": "missing_binary", "message": "agentx binary not on this host"}}
     return {
         "ok": True,
         "agentx_bin": Path(AGENTX_BIN).exists(),
         "agentx_home": AGENTX_HOME,
         "account": AGENTX_ACCOUNT,
+        "env_auth_token": bool(TWITTER_AUTH_TOKEN),
+        "env_ct0": bool(TWITTER_CT0),
         "auth_ok": bool(me.get("ok")),
         "observer": (me.get("data") or {}).get("screenName") if me.get("ok") else None,
         "error": (me.get("error") or None) if not me.get("ok") else None,
+        "vercel": ON_VERCEL,
+        "note": "Set TWITTER_AUTH_TOKEN + TWITTER_CT0 in Vercel Project Settings → Environment Variables. AgentX binary is required for live X probes (use VPS/local if binary missing).",
     }
 
 
