@@ -871,33 +871,235 @@
       return `KeGhost check ${u}: ${label}${detail}\nCek shadowban X kamu 🦫`;
     }
 
+    function statusPalette(status) {
+      const s = (status || 'safe').toLowerCase();
+      if (s === 'banned') return { bg: '#F8DADA', border: '#E8A0A0', text: '#8B4545', face: '😢', label: 'Kena' };
+      if (s === 'warning') return { bg: '#FFF3D6', border: '#F0D48A', text: '#8A6A12', face: '🤔', label: 'Waspada' };
+      return { bg: '#DCEFD6', border: '#A8C4A0', text: '#3F6B3A', face: '😊', label: 'Aman' };
+    }
+
+    function overallLabel(overall) {
+      const s = (overall || 'safe').toLowerCase();
+      if (s === 'banned') return { face: '😢', text: 'Ke-ghost nih' };
+      if (s === 'warning') return { face: '🤔', text: 'Agak shady' };
+      return { face: '😊', text: 'Aman banget' };
+    }
+
+    function waitImage(img, timeoutMs = 4000) {
+      if (!img) return Promise.resolve();
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => resolve();
+        img.onload = done;
+        img.onerror = done;
+        setTimeout(done, timeoutMs);
+      });
+    }
+
+    function buildSharePosterElement(data) {
+      const d = data || lastResult || {};
+      const profile = d.profile || {};
+      const metrics = d.metrics || {};
+      const tests = Array.isArray(d.tests) ? d.tests : [];
+      const overall = overallLabel(d.overall);
+      const ovPal = statusPalette(d.overall);
+      const username = d.username || profile.username || 'user';
+      const displayName = profile.name || ('@' + username);
+      const avatarSrc = profile.avatar || '';
+      const followers = formatCount(profile.followers || 0);
+      const following = formatCount(profile.following || 0);
+      const tweets = formatCount(profile.tweets || 0);
+      const bio = (profile.bio || '').trim();
+      const ts = d.timestamp ? new Date(d.timestamp) : new Date();
+      const timeStr = ts.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+
+      const metric = (label, val, color) => {
+        const n = Math.max(0, Math.min(100, Number(val) || 0));
+        return `
+          <div style="background:#FFF8F0;border:1px solid #E8D5C4;border-radius:16px;padding:12px 10px;min-width:0">
+            <div style="font-size:10px;font-weight:800;color:#7A6A5A;letter-spacing:.04em;text-transform:uppercase">${label}</div>
+            <div style="font-family:'Baloo 2',cursive;font-size:26px;font-weight:700;color:#8B6F4E;line-height:1.1;margin-top:2px">${n}%</div>
+            <div style="margin-top:8px;height:8px;border-radius:999px;background:#F5EDE0;overflow:hidden">
+              <div style="height:100%;width:${n}%;background:${color};border-radius:999px"></div>
+            </div>
+          </div>`;
+      };
+
+      const testCards = tests.map((t) => {
+        const pal = statusPalette(t.status);
+        const conf = typeof t.confidence === 'number' ? t.confidence : null;
+        return `
+          <div style="background:${pal.bg};border:1.5px solid ${pal.border};border-radius:18px;padding:12px 14px">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+              <div style="min-width:0;flex:1">
+                <div style="font-weight:800;color:#3D3229;font-size:14px;line-height:1.2">${escapeHtml(t.name || '')}</div>
+                <div style="margin-top:4px;font-size:11px;font-weight:600;color:#7A6A5A;line-height:1.35">${escapeHtml(t.desc || '')}</div>
+              </div>
+              <div style="flex-shrink:0;background:${pal.border};color:${pal.text};border-radius:999px;padding:4px 9px;font-size:11px;font-weight:800;white-space:nowrap">
+                ${pal.face} ${pal.label}
+              </div>
+            </div>
+            ${conf !== null ? `
+              <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+                <div style="flex:1;height:7px;border-radius:999px;background:rgba(255,255,255,.65);overflow:hidden">
+                  <div style="height:100%;width:${Math.min(100, conf)}%;background:${pal.border};border-radius:999px"></div>
+                </div>
+                <div style="font-size:10px;font-weight:800;color:#7A6A5A">${conf}%</div>
+              </div>` : ''}
+          </div>`;
+      }).join('');
+
+      const root = document.createElement('div');
+      root.setAttribute('data-keghost-poster', '1');
+      root.innerHTML = `
+        <div style="
+          width:680px;
+          box-sizing:border-box;
+          padding:28px;
+          border-radius:28px;
+          background:linear-gradient(180deg,#FFFBF5 0%,#FFF8F0 50%,#F5EDE0 100%);
+          border:1.5px solid #E8D5C4;
+          font-family:Nunito,system-ui,sans-serif;
+          color:#5C4E42;
+        ">
+          <!-- header -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="font-size:34px;line-height:1">🦫</div>
+              <div>
+                <div style="font-family:'Baloo 2',cursive;font-size:28px;font-weight:700;color:#8B6F4E;line-height:1">KeGhost</div>
+                <div style="font-size:12px;font-weight:700;color:#7A6A5A;margin-top:2px">Shadowban report</div>
+              </div>
+            </div>
+            <div style="font-size:11px;font-weight:800;color:#B8956A">by PICA · x.com/peachymoo_</div>
+          </div>
+
+          <!-- profile -->
+          <div style="background:rgba(255,251,245,.96);border:1.5px solid #E8D5C4;border-radius:22px;padding:16px 18px;margin-bottom:12px">
+            <div style="display:flex;gap:14px;align-items:flex-start">
+              <div style="width:72px;height:72px;border-radius:999px;overflow:hidden;border:3px solid #E8D5C4;background:#E8D5C4;flex-shrink:0">
+                ${avatarSrc ? `<img src="${escapeHtml(avatarSrc)}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;display:block" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:34px">🦫</div>`}
+              </div>
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                  <div style="font-family:'Baloo 2',cursive;font-size:22px;font-weight:700;color:#8B6F4E;line-height:1.1">${escapeHtml(displayName)}</div>
+                  ${profile.verified ? `<span style="font-size:10px;font-weight:800;background:#D4E5CE;color:#3F6B3A;border-radius:999px;padding:3px 8px">verified</span>` : ''}
+                  ${profile.protected ? `<span style="font-size:10px;font-weight:800;background:#FFE8E0;color:#8B4545;border-radius:999px;padding:3px 8px">protected</span>` : ''}
+                </div>
+                <div style="font-size:13px;font-weight:800;color:#7A6A5A;margin-top:2px">@${escapeHtml(username)}</div>
+                ${bio ? `<div style="margin-top:6px;font-size:12px;font-weight:600;color:#7A6A5A;line-height:1.4;max-height:3.9em;overflow:hidden">${escapeHtml(bio)}</div>` : ''}
+                <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:12px;font-size:12px;font-weight:800;color:#8B6F4E">
+                  <span>${followers} <span style="font-weight:600;color:#7A6A5A">followers</span></span>
+                  <span>${following} <span style="font-weight:600;color:#7A6A5A">following</span></span>
+                  <span>${tweets} <span style="font-weight:600;color:#7A6A5A">posts</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- overall + metrics -->
+          <div style="background:rgba(255,251,245,.96);border:1.5px solid #E8D5C4;border-radius:22px;padding:16px 18px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+              <div>
+                <div style="font-size:11px;font-weight:800;color:#7A6A5A;text-transform:uppercase;letter-spacing:.04em">Hasil cek</div>
+                <div style="font-family:'Baloo 2',cursive;font-size:30px;font-weight:700;color:#8B6F4E;line-height:1.05;margin-top:2px">@${escapeHtml(username)}</div>
+                <div style="font-size:11px;font-weight:600;color:#7A6A5A;margin-top:4px">Dicek ${escapeHtml(timeStr)}</div>
+              </div>
+              <div style="background:${ovPal.bg};border:1.5px solid ${ovPal.border};color:${ovPal.text};border-radius:999px;padding:8px 14px;font-size:13px;font-weight:800;white-space:nowrap">
+                ${overall.face} ${overall.text}
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              ${metric('Search', metrics.search, '#A8C4A0')}
+              ${metric('Reply', metrics.reply, '#C8A982')}
+              ${metric('Quote', metrics.quote, '#B8A4D0')}
+              ${metric('Engage', metrics.engagement, '#E8A0A0')}
+            </div>
+          </div>
+
+          <!-- tests -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+            ${testCards || `<div style="grid-column:1/-1;padding:16px;text-align:center;color:#7A6A5A;font-weight:700">Tidak ada data tes</div>`}
+          </div>
+
+          <!-- footer -->
+          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:4px">
+            <div style="font-size:12px;font-weight:800;color:#7A6A5A">Made with 🦫 by PICA</div>
+            <div style="font-size:12px;font-weight:800;color:#B8956A">KeGhost · cozy checker</div>
+          </div>
+        </div>
+      `;
+      return root;
+    }
+
     async function captureReportImage() {
       if (typeof html2canvas !== 'function') {
         throw new Error('html2canvas belum ke-load');
       }
-      const card = document.getElementById('share-card');
-      if (!card) throw new Error('share card missing');
-      card.classList.add('capturing');
-      // wait fonts/images
-      await new Promise(r => setTimeout(r, 80));
+      if (!lastResult) {
+        throw new Error('Belum ada hasil cek');
+      }
+
+      // Dedicated poster (inline styles) — avoids animation/backdrop bugs from live DOM
+      const host = document.createElement('div');
+      host.style.cssText = 'position:fixed;left:-12000px;top:0;z-index:-1;pointer-events:none;';
+      const poster = buildSharePosterElement(lastResult);
+      host.appendChild(poster);
+      document.body.appendChild(host);
+
+      // Ensure fonts + avatar ready
       try {
-        const canvas = await html2canvas(card, {
+        if (document.fonts && document.fonts.ready) {
+          await Promise.race([
+            document.fonts.ready,
+            new Promise(r => setTimeout(r, 1200))
+          ]);
+        }
+      } catch (_) {}
+
+      const imgs = poster.querySelectorAll('img');
+      await Promise.all(Array.from(imgs).map(img => waitImage(img)));
+      await new Promise(r => setTimeout(r, 60));
+
+      try {
+        const target = poster.firstElementChild || poster;
+        const canvas = await html2canvas(target, {
           backgroundColor: '#FFF8F0',
-          scale: Math.min(2, window.devicePixelRatio || 1.5),
+          scale: 2,
           useCORS: true,
-          allowTaint: false,
+          allowTaint: true,
           logging: false,
+          imageTimeout: 4000,
+          removeContainer: true,
+          width: target.offsetWidth,
+          height: target.offsetHeight,
+          windowWidth: target.offsetWidth,
+          windowHeight: target.offsetHeight,
           scrollX: 0,
-          scrollY: -window.scrollY
+          scrollY: 0,
+          x: 0,
+          y: 0,
+          onclone: (doc) => {
+            // Kill any leftover animations in clone
+            const style = doc.createElement('style');
+            style.textContent = `
+              * { animation: none !important; transition: none !important; }
+              img { image-rendering: auto; }
+            `;
+            doc.head.appendChild(style);
+          }
         });
+
+        // Trim accidental transparent edges
         const blob = await new Promise((resolve, reject) => {
-          canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/png', 0.95);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/png');
         });
         return { canvas, blob };
       } finally {
-        card.classList.remove('capturing');
+        host.remove();
       }
     }
+
 
     function openShareModal(blob) {
       if (lastShareUrl) URL.revokeObjectURL(lastShareUrl);
