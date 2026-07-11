@@ -330,6 +330,28 @@
 
       <!-- Results state -->
       <div id="state-results" class="state-panel fade-swap">
+        <!-- Profile (AgentX) -->
+        <div id="profile-card" class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-4 hidden">
+          <div class="flex items-start gap-4">
+            <img id="profile-avatar" src="" alt="" class="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-[3px] border-cream-300 shadow-card bg-cream-200" />
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <div id="profile-name" class="font-display text-xl sm:text-2xl text-cocoa-700 font-bold truncate"></div>
+                <span id="profile-verified" class="hidden text-xs font-extrabold px-2 py-0.5 rounded-full bg-sage-200 text-sage-500">verified</span>
+                <span id="profile-protected" class="hidden text-xs font-extrabold px-2 py-0.5 rounded-full bg-peach-200 text-peach-500">protected</span>
+              </div>
+              <div id="profile-handle" class="text-sm font-bold text-ink-500/80"></div>
+              <p id="profile-bio" class="mt-1.5 text-sm text-ink-500 font-medium leading-snug line-clamp-3"></p>
+              <div class="mt-2.5 flex flex-wrap gap-3 text-xs font-extrabold text-cocoa-700">
+                <span><span id="profile-followers">0</span> <span class="font-semibold text-ink-500/70">followers</span></span>
+                <span><span id="profile-following">0</span> <span class="font-semibold text-ink-500/70">following</span></span>
+                <span><span id="profile-tweets">0</span> <span class="font-semibold text-ink-500/70">posts</span></span>
+              </div>
+            </div>
+          </div>
+          <div id="profile-source" class="mt-3 text-[11px] font-bold text-ink-500/50"></div>
+        </div>
+
         <!-- Overall -->
         <div class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
@@ -533,13 +555,16 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username })
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = data.error || ('HTTP ' + res.status);
+          throw new Error(msg);
+        }
         renderResults(data);
         setState('results');
       } catch (err) {
         document.getElementById('error-msg').textContent =
-          'Yah capybara-nya bingung nih, coba lagi yuk 🦫';
+          (err && err.message) ? err.message : 'Yah capybara-nya bingung nih, coba lagi yuk 🦫';
         setState('error');
       } finally {
         btn.disabled = false;
@@ -550,6 +575,35 @@
 
     function renderResults(data) {
       document.getElementById('result-username').textContent = '@' + data.username;
+
+      // Profile card from AgentX
+      const p = data.profile;
+      const profileCard = document.getElementById('profile-card');
+      if (p && p.username) {
+        profileCard.classList.remove('hidden');
+        const avatar = document.getElementById('profile-avatar');
+        avatar.src = p.avatar || '';
+        avatar.alt = p.name || p.username;
+        avatar.onerror = () => {
+          avatar.onerror = null;
+          avatar.src = 'data:image/svg+xml,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" rx="80" fill="#E8D5C4"/><text x="50%" y="54%" text-anchor="middle" font-size="64">🦫</text></svg>'
+          );
+        };
+        document.getElementById('profile-name').textContent = p.name || p.username;
+        document.getElementById('profile-handle').textContent = '@' + p.username;
+        document.getElementById('profile-bio').textContent = p.bio || '—';
+        document.getElementById('profile-followers').textContent = formatCount(p.followers || 0);
+        document.getElementById('profile-following').textContent = formatCount(p.following || 0);
+        document.getElementById('profile-tweets').textContent = formatCount(p.tweets || 0);
+        document.getElementById('profile-verified').classList.toggle('hidden', !p.verified);
+        document.getElementById('profile-protected').classList.toggle('hidden', !p.protected);
+        const src = data.source || {};
+        document.getElementById('profile-source').textContent =
+          'Live via AgentX' + (src.account ? ' · observer ' + src.account : '');
+      } else {
+        profileCard.classList.add('hidden');
+      }
 
       const overall = (data.overall || 'safe').toLowerCase();
       const meta = statusMeta[overall] || statusMeta.safe;
@@ -658,6 +712,14 @@
           bar.style.width = Math.max(0, Math.min(100, num)) + '%';
         });
       });
+    }
+
+    function formatCount(n) {
+      const num = Number(n) || 0;
+      if (num >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+      if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (num >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(num);
     }
 
     function escapeHtml(str) {

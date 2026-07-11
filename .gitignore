@@ -5,6 +5,8 @@ __pycache__/
 venv/
 .env
 .vercel
-.DS_Store
-flora-ui-prompt.txt
+.agentx-home/
+.avatar-cache/
 *.log
+flora-ui-prompt.txt
+.DS_Store
