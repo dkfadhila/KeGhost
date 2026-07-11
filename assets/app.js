@@ -43,7 +43,8 @@ const I18N={
     nonFollow:"Belum follow balik",
     chartVis:"Skor Visibility",chartLayer:"Confidence per Layer",
     solTitle:"💡 10 Solusi dari Capy",
-    deepErr:"CapyAi lagi rewel, coba lagi bentar ya 🦫"
+    deepErr:"CapyAi lagi rewel, coba lagi bentar ya 🦫",
+    chatAuth:"Capy lagi butuh auth ulang. Pantau aja ya 🦫",
   },
   en:{
     tagline:"with capy 🦫",
@@ -84,7 +85,8 @@ const I18N={
     nonFollow:"Not following back",
     chartVis:"Visibility Score",chartLayer:"Confidence per Layer",
     solTitle:"💡 10 Solutions from Capy",
-    deepErr:"CapyAi is fussy, try again in a bit 🦫"
+    deepErr:"CapyAi is fussy, try again in a bit 🦫",
+    chatAuth:"Capy needs re-auth. Hang tight 🦫",
   }
 };
 let LANG=localStorage.getItem("keghost-lang")||"id";
@@ -487,6 +489,10 @@ async function sendChat(message,template){
       chatMsg(data.reply||t("deepErr"),"capy");
       if(!data.follows) followCta(data.brand);
       updateQuotaBadge({limit:data.limit,used:data.used,remaining:0,follows:data.follows});
+      return;
+    }
+    if(r.status===503 && data.code==="cline_auth"){
+      chatMsg(data.reply||t("chatAuth"),"capy");
       return;
     }
     if(data.error && !data.reply) throw new Error(data.error);

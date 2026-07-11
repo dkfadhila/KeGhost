@@ -263,6 +263,81 @@ async def sb_chat_quota_incr(username: str, day: str) -> None:
         pass
 
 
+# Cline refresh support (optional). Some Cline OAuth tokens are short-lived.
+# Set these env vars to enable background refresh on 401:
+#   CLINE_REFRESH_URL  = full URL to hit for a new token
+#   CLINE_REFRESH_BODY = JSON body to POST (e.g. {"refresh_token": "..."})
+#   CLINE_REFRESH_HEADER = optional extra header (e.g. 'X-Api-Key: ...')
+# If the refresh succeeds, the new token is written to a small cache file
+# (CLINE_REFRESH_CACHE_FILE, default /tmp/cline_token.json) and used for the
+# rest of the request. This avoids needing a redeploy when the token rotates.
+CLINE_REFRESH_URL = os.environ.get("CLINE_REFRESH_URL", "").strip()
+CLINE_REFRESH_BODY = os.environ.get("CLINE_REFRESH_BODY", "").strip()
+CLINE_REFRESH_HEADER = os.environ.get("CLINE_REFRESH_HEADER", "").strip()
+CLINE_REFRESH_CACHE_FILE = os.environ.get(
+    "CLINE_REFRESH_CACHE_FILE", "/tmp/cline_token.json" if ON_VERCEL else str(BASE_DIR / ".cline_token.json")
+)
+
+
+def _read_cached_token() -> str | None:
+    """Use refreshed token from cache if it overrides the env-provided one."""
+    if not CLINE_REFRESH_URL:
+        return None
+    try:
+        import json as _json
+        p = Path(CLINE_REFRESH_CACHE_FILE)
+        if p.exists():
+            data = _json.loads(p.read_text(encoding="utf-8"))
+            tok = (data.get("access_token") or data.get("token") or "").strip()
+            if tok:
+                return tok
+    except Exception:
+        pass
+    return None
+
+
+def _write_cached_token(tok: str) -> None:
+    if not CLINE_REFRESH_URL or not tok:
+        return
+    try:
+        import json as _json
+        Path(CLINE_REFRESH_CACHE_FILE).write_text(
+            _json.dumps({"access_token": tok}), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+
+async def _refresh_cline_token() -> str | None:
+    """Try to mint a new Cline access token. Returns None on failure."""
+    if not CLINE_REFRESH_URL or not CLINE_REFRESH_BODY:
+        return None
+    try:
+        import json as _json
+        body = _json.loads(CLINE_REFRESH_BODY)
+    except Exception:
+        body = CLINE_REFRESH_BODY
+    hdrs = {"Content-Type": "application/json"}
+    if CLINE_REFRESH_HEADER:
+        # format: "Key: Value"
+        if ":" in CLINE_REFRESH_HEADER:
+            k, v = CLINE_REFRESH_HEADER.split(":", 1)
+            hdrs[k.strip()] = v.strip()
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.post(CLINE_REFRESH_URL, headers=hdrs, json=body if isinstance(body, dict) else None)
+        if not (200 <= r.status_code < 300):
+            return None
+        data = r.json()
+        tok = (data.get("access_token") or data.get("token") or "").strip()
+        if tok:
+            _write_cached_token(tok)
+            return tok
+    except Exception:
+        return None
+    return None
+
+
 async def _cline_chat(
     model: str,
     messages: list,
@@ -270,18 +345,21 @@ async def _cline_chat(
     timeout: float = 60.0,
     max_retries: int = 2,
 ) -> str:
-    """Call Cline /v1/chat/completions with retry-on-503.
+    """Call Cline /v1/chat/completions. Retry on 429/5xx; refresh-on-401 once.
     Returns the assistant text. Raises RuntimeError on hard failure."""
-    if not CLINE_API_KEY:
+    if not (CLINE_API_KEY or _read_cached_token()):
         raise RuntimeError("CLINE_API_KEY not set on this host")
+
     last_err = "unknown"
+    refreshed = False
     for attempt in range(max_retries + 1):
+        tok = _read_cached_token() or CLINE_API_KEY
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 r = await client.post(
                     CLINE_URL,
                     headers={
-                        "Authorization": f"Bearer {CLINE_API_KEY}",
+                        "Authorization": f"Bearer {tok}",
                         "Content-Type": "application/json",
                     },
                     json={"model": model, "messages": messages, "stream": False},
@@ -289,12 +367,24 @@ async def _cline_chat(
             if 200 <= r.status_code < 300:
                 data = r.json()
                 return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            # Auth: try to refresh token once, then retry
+            if r.status_code in (401, 403) and not refreshed:
+                new_tok = await _refresh_cline_token()
+                if new_tok:
+                    refreshed = True
+                    continue
+                raise RuntimeError(
+                    f"Cline auth expired (HTTP {r.status_code}). "
+                    "Set ulang CLINE_API_KEY di Vercel env, atau konfig refresh."
+                )
             # retry only on transient overload / rate
             if r.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
                 await asyncio.sleep(0.6 * (attempt + 1))
                 continue
             last_err = f"Cline HTTP {r.status_code}: {r.text[:160]}"
             break
+        except RuntimeError:
+            raise
         except (httpx.TimeoutException, asyncio.TimeoutError) as e:
             last_err = f"Cline timeout: {e}"
             if attempt < max_retries:
@@ -1767,17 +1857,31 @@ async def capy_chat(req: ChatRequest):
         try:
             content = await _cline_chat(CLINE_CHAT_MODEL, messages, timeout=60.0)
         except Exception as cline_err:
-            # Fallback to Virtuals only if Cline is the failing one.
-            if not VIRTUALS_KEY:
+            err_str = str(cline_err)
+            # Auth failure — surface clearly, don't hide behind "rewel".
+            if "auth expired" in err_str.lower() or "not set" in err_str.lower():
+                return JSONResponse(
+                    {
+                        "error": "auth",
+                        "code": "cline_auth",
+                        "reply": (
+                            "Capy lagi butuh auth ulang. Pantau aja ya, fix-nya lagi jalan 🦫"
+                        ),
+                    },
+                    status_code=503,
+                )
+            # Other Cline failure — try Virtuals fallback.
+            if VIRTUALS_KEY:
+                try:
+                    content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=60.0)
+                except Exception as virt_err:
+                    return JSONResponse(
+                        {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
+                        status_code=502,
+                    )
+            else:
                 return JSONResponse(
                     {"error": f"CapyAi error: {cline_err}"}, status_code=502
-                )
-            try:
-                content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=60.0)
-            except Exception as virt_err:
-                return JSONResponse(
-                    {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
-                    status_code=502,
                 )
     except Exception as e:
         return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
