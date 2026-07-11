@@ -527,7 +527,9 @@
       navU.textContent='@'+data.username;navU.classList.remove('hidden');
 
       // Overall badge
-      const ov=(data.overall||'safe').toLowerCase();      // Grok hint
+      const ov=(data.overall||'safe').toLowerCase();
+      const layers=data.layers||data.tests||[];
+      // Grok hint
       const hasIssue=layers.some(l=>l.status==='banned'||l.status==='warning');
       document.getElementById('grok-hint').classList.toggle('hidden',!hasIssue);
 
