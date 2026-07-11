@@ -411,7 +411,7 @@
           </div>
           <div class="text-[11px] font-extrabold text-cocoa-500">keghost · by PICA</div>
         </div>
-        <!-- Profile (AgentX) -->
+        <!-- Profile -->
         <div id="profile-card" class="surface rounded-[28px] shadow-soft p-5 sm:p-6 mb-4 hidden">
           <div class="profile-row flex items-start gap-4">
             <img id="profile-avatar" src="" alt="" class="profile-avatar-lg w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-[3px] border-cream-300 shadow-card bg-cream-200" crossorigin="anonymous" />
@@ -695,7 +695,7 @@
       lastResult = data;
       document.getElementById('result-username').textContent = '@' + data.username;
 
-      // Profile card from AgentX
+      // Profile card
       const p = data.profile;
       const profileCard = document.getElementById('profile-card');
       if (p && p.username) {
@@ -719,7 +719,7 @@
         document.getElementById('profile-protected').classList.toggle('hidden', !p.protected);
         const src = data.source || {};
         document.getElementById('profile-source').textContent =
-          'Live via AgentX' + (src.account ? ' · observer ' + src.account : '');
+          'Live data dari X';
       } else {
         profileCard.classList.add('hidden');
       }
@@ -874,314 +874,66 @@
       const text = buildShareText(data || lastResult || {});
       // x.com compose (fallback intent.tweet)
       const url = 'https://x.com/compose/post?text=' + encodeURIComponent(text);
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return text;
-    }
-
-    function statusPalette(status) {
+      windo    function statusPalette(status) {
       const s = (status || 'safe').toLowerCase();
-      if (s === 'banned') return {
-        bg: '#FDECEC', border: '#F0B4B4', text: '#9B3B3B',
-        soft: '#FFF5F5', face: '!', label: 'KENA', chipBg: '#F5CACA'
-      };
-      if (s === 'warning') return {
-        bg: '#FFF7E6', border: '#F0D48A', text: '#8A6410',
-        soft: '#FFFCF3', face: '!', label: 'WASPADA', chipBg: '#F8E4A8'
-      };
-      return {
-        bg: '#EAF6E6', border: '#B5D4AD', text: '#2F6B38',
-        soft: '#F5FBF3', face: '✓', label: 'AMAN', chipBg: '#CDE8C6'
-      };
+      if (s === 'banned') return { bg: '#FDECEC', border: '#F0B4B4', text: '#9B3B3B', soft: '#FFF5F5', face: '!', label: 'KENA', chipBg: '#F5CACA' };
+      if (s === 'warning') return { bg: '#FFF7E6', border: '#F0D48A', text: '#8A6410', soft: '#FFFCF3', face: '!', label: 'WASPADA', chipBg: '#F8E4A8' };
+      return { bg: '#EAF6E6', border: '#B5D4AD', text: '#2F6B38', soft: '#F5FBF3', face: '✓', label: 'AMAN', chipBg: '#CDE8C6' };
     }
 
     function overallLabel(overall) {
       const s = (overall || 'safe').toLowerCase();
-      if (s === 'banned') return { mark: '!', text: 'GHOST', sub: 'Terdeteksi shadowban' };
-      if (s === 'warning') return { mark: '!', text: 'WASPADA', sub: 'Ada sinyal terbatas' };
-      return { mark: '✓', text: 'AMAN', sub: 'Tidak ada ban terdeteksi' };
-    }
-
-    function waitImage(img, timeoutMs = 4000) {
-      if (!img) return Promise.resolve();
-      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-      return new Promise((resolve) => {
-        const done = () => resolve();
-        img.onload = done;
-        img.onerror = done;
-        setTimeout(done, timeoutMs);
-      });
-    }
-
-    function pillBadge(text, opts = {}) {
-      const bg = opts.bg || '#EAF6E6';
-      const color = opts.color || '#2F6B38';
-      const border = opts.border || '#B5D4AD';
-      const mark = opts.mark || '';
-      const markBg = opts.markBg || color;
-      return `
-        <div style="
-          display:inline-flex;
-          align-items:center;
-          gap:7px;
-          height:30px;
-          padding:0 12px 0 ${mark ? '8px' : '12px'};
-          border-radius:999px;
-          background:${bg};
-          border:1.5px solid ${border};
-          color:${color};
-          font-size:12px;
-          font-weight:800;
-          letter-spacing:0.04em;
-          line-height:1;
-          white-space:nowrap;
-          box-sizing:border-box;
-        ">
-          ${mark ? `<span style="
-            width:18px;height:18px;border-radius:999px;
-            background:${markBg};color:#fff;
-            display:inline-flex;align-items:center;justify-content:center;
-            font-size:11px;font-weight:900;line-height:1;
-          ">${mark}</span>` : ''}
-          <span style="line-height:1;transform:translateY(0.5px)">${text}</span>
-        </div>`;
-    }
-
-    function miniChip(text, opts = {}) {
-      const bg = opts.bg || '#EAF6E6';
-      const color = opts.color || '#2F6B38';
-      const border = opts.border || 'transparent';
-      return `
-        <span style="
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          height:22px;
-          padding:0 9px;
-          border-radius:999px;
-          background:${bg};
-          border:1px solid ${border};
-          color:${color};
-          font-size:10px;
-          font-weight:800;
-          letter-spacing:0.05em;
-          text-transform:uppercase;
-          line-height:1;
-          white-space:nowrap;
-          box-sizing:border-box;
-        ">${text}</span>`;
-    }
-
-    function buildSharePosterElement(data) {
-      const d = data || lastResult || {};
-      const profile = d.profile || {};
-      const metrics = d.metrics || {};
-      const tests = Array.isArray(d.tests) ? d.tests : [];
-      const overall = overallLabel(d.overall);
-      const ovPal = statusPalette(d.overall);
-      const username = d.username || profile.username || 'user';
-      const displayName = profile.name || ('@' + username);
-      const avatarSrc = profile.avatar || '';
-      const followers = formatCount(profile.followers || 0);
-      const following = formatCount(profile.following || 0);
-      const tweets = formatCount(profile.tweets || 0);
-      const bio = (profile.bio || '').replace(/\s+/g, ' ').trim();
-      const shortBio = bio.length > 90 ? bio.slice(0, 87) + '…' : bio;
-      const ts = d.timestamp ? new Date(d.timestamp) : new Date();
-      const timeStr = ts.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-
-      const metric = (label, val, color) => {
-        const n = Math.max(0, Math.min(100, Number(val) || 0));
-        return `
-          <div style="background:#FFFBF7;border:1px solid #EADCCE;border-radius:14px;padding:12px 11px;min-width:0">
-            <div style="font-size:10px;font-weight:800;color:#8A7A6A;letter-spacing:.06em;text-transform:uppercase;line-height:1">${label}</div>
-            <div style="font-family:'Baloo 2',cursive;font-size:24px;font-weight:700;color:#6F563F;line-height:1;margin-top:6px">${n}%</div>
-            <div style="margin-top:9px;height:6px;border-radius:999px;background:#F0E6DA;overflow:hidden">
-              <div style="height:100%;width:${n}%;background:${color};border-radius:999px"></div>
-            </div>
-          </div>`;
-      };
-
-      const testCards = tests.map((t) => {
-        const pal = statusPalette(t.status);
-        const conf = typeof t.confidence === 'number' ? t.confidence : null;
-        const desc = (t.desc || '').replace(/\s+/g, ' ').trim();
-        const shortDesc = desc.length > 72 ? desc.slice(0, 69) + '…' : desc;
-        return `
-          <div style="background:${pal.soft};border:1.5px solid ${pal.border};border-radius:16px;padding:12px 12px 11px">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
-              <div style="font-weight:800;color:#3D3229;font-size:13px;line-height:1.15;letter-spacing:-0.01em">${escapeHtml(t.name || '')}</div>
-              ${pillBadge(pal.label, { bg: pal.chipBg, color: pal.text, border: pal.border, mark: pal.face, markBg: pal.text })}
-            </div>
-            <div style="font-size:11px;font-weight:600;color:#7A6A5A;line-height:1.35;min-height:30px">${escapeHtml(shortDesc)}</div>
-            ${conf !== null ? `
-              <div style="margin-top:9px;display:flex;align-items:center;gap:8px">
-                <div style="flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.75);overflow:hidden">
-                  <div style="height:100%;width:${Math.min(100, conf)}%;background:${pal.border};border-radius:999px"></div>
-                </div>
-                <div style="font-size:10px;font-weight:800;color:#8A7A6A;min-width:28px;text-align:right">${conf}%</div>
-              </div>` : ''}
-          </div>`;
-      }).join('');
-
-      const chips = [
-        profile.verified ? miniChip('✓ Verified', { bg: '#E7F5E4', color: '#2F6B38', border: '#B9DDB2' }) : '',
-        profile.protected ? miniChip('Protected', { bg: '#FFEDE8', color: '#9B3B3B', border: '#F0C0B4' }) : '',
-      ].filter(Boolean).join('');
-
-      const root = document.createElement('div');
-      root.setAttribute('data-keghost-poster', '1');
-      root.innerHTML = `
-        <div style="
-          width:680px;
-          box-sizing:border-box;
-          padding:26px 26px 22px;
-          border-radius:28px;
-          background:linear-gradient(165deg,#FFFCF8 0%,#FFF6EC 48%,#F3E6D8 100%);
-          border:1.5px solid #E5D4C3;
-          font-family:Nunito,system-ui,sans-serif;
-          color:#5C4E42;
-        ">
-          <!-- header -->
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:42px;height:42px;border-radius:14px;background:#FFF;border:1px solid #EADCCE;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1;box-shadow:0 4px 12px rgba(139,111,78,.08)">🦫</div>
-              <div>
-                <div style="font-family:'Baloo 2',cursive;font-size:26px;font-weight:700;color:#6F563F;line-height:1;letter-spacing:-0.02em">KeGhost</div>
-                <div style="font-size:11px;font-weight:700;color:#9A8774;margin-top:3px;letter-spacing:0.02em">Shadowban report</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:11px;font-weight:800;color:#B08968;letter-spacing:0.02em">by PICA</div>
-              <div style="font-size:10px;font-weight:700;color:#A89380;margin-top:2px">x.com/peachymoo_</div>
-            </div>
-          </div>
-
-          <!-- profile -->
-          <div style="background:#FFFCFA;border:1.5px solid #EADCCE;border-radius:20px;padding:14px 16px;margin-bottom:12px;box-shadow:0 6px 18px rgba(139,111,78,.05)">
-            <div style="display:flex;gap:14px;align-items:center">
-              <div style="width:68px;height:68px;border-radius:999px;overflow:hidden;border:3px solid #F0E4D8;background:#EADCCE;flex-shrink:0">
-                ${avatarSrc ? `<img src="${escapeHtml(avatarSrc)}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;display:block" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:30px">🦫</div>`}
-              </div>
-              <div style="min-width:0;flex:1">
-                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
-                  <div style="font-family:'Baloo 2',cursive;font-size:22px;font-weight:700;color:#6F563F;line-height:1;letter-spacing:-0.02em">${escapeHtml(displayName)}</div>
-                  ${chips}
-                </div>
-                <div style="font-size:13px;font-weight:800;color:#8A7A6A;margin-top:5px;line-height:1">@${escapeHtml(username)}</div>
-                ${shortBio ? `<div style="margin-top:7px;font-size:12px;font-weight:600;color:#7A6A5A;line-height:1.35">${escapeHtml(shortBio)}</div>` : ''}
-                <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:14px;font-size:12px;font-weight:800;color:#6F563F;line-height:1">
-                  <span><span style="color:#6F563F">${followers}</span> <span style="font-weight:600;color:#9A8774">followers</span></span>
-                  <span><span style="color:#6F563F">${following}</span> <span style="font-weight:600;color:#9A8774">following</span></span>
-                  <span><span style="color:#6F563F">${tweets}</span> <span style="font-weight:600;color:#9A8774">posts</span></span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- overall + metrics -->
-          <div style="background:#FFFCFA;border:1.5px solid #EADCCE;border-radius:20px;padding:14px 16px;margin-bottom:12px;box-shadow:0 6px 18px rgba(139,111,78,.05)">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px">
-              <div style="min-width:0">
-                <div style="font-size:10px;font-weight:800;color:#9A8774;text-transform:uppercase;letter-spacing:.08em;line-height:1">Hasil cek</div>
-                <div style="font-family:'Baloo 2',cursive;font-size:28px;font-weight:700;color:#6F563F;line-height:1;margin-top:5px;letter-spacing:-0.02em">@${escapeHtml(username)}</div>
-                <div style="font-size:11px;font-weight:600;color:#9A8774;margin-top:5px;line-height:1">Dicek ${escapeHtml(timeStr)}</div>
-              </div>
-              <div style="text-align:right;flex-shrink:0">
-                ${pillBadge(overall.text, { bg: ovPal.chipBg, color: ovPal.text, border: ovPal.border, mark: overall.mark, markBg: ovPal.text })}
-                <div style="margin-top:6px;font-size:10px;font-weight:700;color:#9A8774;line-height:1">${escapeHtml(overall.sub)}</div>
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-              ${metric('Search', metrics.search, '#8FBF86')}
-              ${metric('Reply', metrics.reply, '#C8A982')}
-              ${metric('Quote', metrics.quote, '#B29FD0')}
-              ${metric('Engage', metrics.engagement, '#E29A9A')}
-            </div>
-          </div>
-
-          <!-- tests -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-            ${testCards || `<div style="grid-column:1/-1;padding:16px;text-align:center;color:#7A6A5A;font-weight:700">Tidak ada data tes</div>`}
-          </div>
-
-          <!-- footer -->
-          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:2px;border-top:1px solid #EADCCE">
-            <div style="font-size:11px;font-weight:800;color:#8A7A6A;padding-top:10px;line-height:1">Made with 🦫 by PICA</div>
-            <div style="font-size:11px;font-weight:800;color:#B08968;padding-top:10px;line-height:1">KeGhost · cozy checker</div>
-          </div>
-        </div>
-      `;
-      return root;
+      if (s === 'banned') return { face: '😢', text: 'Ke-ghost nih 😢' };
+      if (s === 'warning') return { face: '🤔', text: 'Agak shady 🤔' };
+      return { face: '😊', text: 'Aman banget 😊' };
     }
 
     async function captureReportImage() {
       if (typeof html2canvas !== 'function') {
         throw new Error('html2canvas belum ke-load');
       }
-      if (!lastResult) {
-        throw new Error('Belum ada hasil cek');
-      }
+      const card = document.getElementById('share-card');
+      if (!card) throw new Error('share card missing');
 
-      // Dedicated poster (inline styles) — avoids animation/backdrop bugs from live DOM
-      const host = document.createElement('div');
-      host.style.cssText = 'position:fixed;left:-12000px;top:0;z-index:-1;pointer-events:none;';
-      const poster = buildSharePosterElement(lastResult);
-      host.appendChild(poster);
-      document.body.appendChild(host);
+      const brands = card.querySelectorAll('.share-brand');
+      const noCaps = card.querySelectorAll('.no-capture');
+      brands.forEach(b => b.style.display = 'flex');
+      noCaps.forEach(el => el.style.display = 'none');
 
-      // Ensure fonts + avatar ready
       try {
         if (document.fonts && document.fonts.ready) {
-          await Promise.race([
-            document.fonts.ready,
-            new Promise(r => setTimeout(r, 1200))
-          ]);
+          await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1000))]);
         }
       } catch (_) {}
-
-      const imgs = poster.querySelectorAll('img');
-      await Promise.all(Array.from(imgs).map(img => waitImage(img)));
-      await new Promise(r => setTimeout(r, 60));
+      await Promise.all(Array.from(card.querySelectorAll('img')).map(img => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; setTimeout(resolve, 3000); });
+      }));
+      await new Promise(r => setTimeout(r, 50));
 
       try {
-        const target = poster.firstElementChild || poster;
-        const canvas = await html2canvas(target, {
+        const canvas = await html2canvas(card, {
           backgroundColor: '#FFF8F0',
           scale: 2,
           useCORS: true,
           allowTaint: true,
           logging: false,
-          imageTimeout: 4000,
-          removeContainer: true,
-          width: target.offsetWidth,
-          height: target.offsetHeight,
-          windowWidth: target.offsetWidth,
-          windowHeight: target.offsetHeight,
-          scrollX: 0,
-          scrollY: 0,
-          x: 0,
-          y: 0,
+          imageTimeout: 3000,
           onclone: (doc) => {
-            // Kill any leftover animations in clone
             const style = doc.createElement('style');
-            style.textContent = `
-              * { animation: none !important; transition: none !important; }
-              img { image-rendering: auto; }
-            `;
+            style.textContent = '* { animation: none !important; transition: none !important; }';
             doc.head.appendChild(style);
           }
         });
-
-        // Trim accidental transparent edges
         const blob = await new Promise((resolve, reject) => {
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('blob fail')), 'image/png');
         });
         return { canvas, blob };
       } finally {
-        host.remove();
+        brands.forEach(b => b.style.display = 'none');
+        noCaps.forEach(el => el.style.display = '');
       }
     }
-
 
     function openShareModal(blob) {
       if (lastShareUrl) URL.revokeObjectURL(lastShareUrl);
