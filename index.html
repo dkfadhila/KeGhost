@@ -491,7 +491,7 @@
         <!-- Share actions (not captured) -->
         <div class="no-capture surface rounded-[28px] shadow-soft p-4 sm:p-5 mt-4">
           <div class="font-display text-lg text-cocoa-700 font-bold mb-1">Share report ✨</div>
-          <p class="text-xs text-ink-500 font-medium mb-3">Screenshot hasil cek → share ke X sebagai gambar</p>
+          <p class="text-xs text-ink-500 font-medium mb-3">Share ke X buka compose + caption pendek. Download buat simpan gambar report.</p>
           <div class="share-actions flex flex-col sm:flex-row gap-2.5">
             <button id="btn-share-x" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-[#111] text-white font-extrabold px-5 py-3 shadow-pill">
               <span>𝕏</span><span>Share ke X</span>
@@ -860,15 +860,24 @@
     }
 
     function buildShareText(data) {
-      const u = data && data.username ? '@' + data.username : '@user';
-      const overall = (data && data.overall) || 'safe';
-      const label = overall === 'safe' ? 'AMAN' : overall === 'warning' ? 'WASPADA' : 'KENA GHOST';
-      const tests = (data && data.tests) || [];
-      const bad = tests.filter(t => t.status === 'banned' || t.status === 'warning')
-        .map(t => t.name.replace(' Ban',''))
-        .slice(0, 4);
-      const detail = bad.length ? (' · ' + bad.join(', ')) : ' · all clear';
-      return `KeGhost check ${u}: ${label}${detail}\nCek shadowban X kamu 🦫`;
+      const u = data && data.username ? '@' + data.username : '';
+      const overall = ((data && data.overall) || 'safe').toLowerCase();
+      let vibe = 'AMAN';
+      if (overall === 'warning') vibe = 'WASPADA';
+      if (overall === 'banned') vibe = 'KENA GHOST';
+      // Caption pendek + link + emoji love / capybara / star
+      if (u) {
+        return `Cek shadowban X ${u}: ${vibe} ❤️🦫⭐\nhttps://keghost.vercel.app/`;
+      }
+      return `Cek shadowban X kamu di KeGhost ❤️🦫⭐\nhttps://keghost.vercel.app/`;
+    }
+
+    function openComposeOnX(data) {
+      const text = buildShareText(data || lastResult || {});
+      // x.com compose (fallback intent.tweet)
+      const url = 'https://x.com/compose/post?text=' + encodeURIComponent(text);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return text;
     }
 
     function statusPalette(status) {
@@ -1205,40 +1214,31 @@
     }
 
     async function shareToX(blob) {
+      // Optional: kalau ada gambar, coba share sheet dulu; tetap buka compose caption
       const data = lastResult || {};
       const text = buildShareText(data);
-      const file = new File([blob], `keghost-${data.username || 'report'}.png`, { type: 'image/png' });
-
-      // Mobile / modern: Web Share with image file
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'KeGhost Report',
-          text: text
-        });
-        setShareStatus('Ke-share lewat device share sheet ✨');
-        return;
-      }
-      if (navigator.share) {
+      if (blob) {
         try {
-          await navigator.share({ title: 'KeGhost Report', text: text });
+          const file = new File([blob], `keghost-${data.username || 'report'}.png`, { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: 'KeGhost Report', text: text });
+            setShareStatus('Ke-share lewat device ✨ — tempelin gambar di post X kalau perlu');
+            openComposeOnX(data);
+            return;
+          }
         } catch (_) {}
       }
-      // Fallback: download image + open X intent (user attaches image manually)
-      await downloadShareBlob(blob, data.username);
-      const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
-      window.open(intent, '_blank', 'noopener,noreferrer');
-      setShareStatus('Gambar di-download. Tempelin ke post X-nya ya 🦫');
+      openComposeOnX(data);
+      setShareStatus('Compose X dibuka ❤️🦫⭐');
     }
 
-    async function handleShareX() {
+    function handleShareX() {
+      // Langsung buka https://x.com/compose/post dengan caption pendek + link
       try {
-        setShareStatus('Bikin screenshot dulu…');
-        const { blob } = await captureReportImage();
-        openShareModal(blob);
-        setShareStatus('Preview siap — share atau download');
+        openComposeOnX(lastResult || {});
+        setShareStatus('Compose X dibuka ❤️🦫⭐');
       } catch (e) {
-        setShareStatus('Gagal bikin gambar: ' + (e.message || e));
+        setShareStatus('Gagal buka X: ' + (e.message || e));
       }
     }
 
