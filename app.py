@@ -66,36 +66,35 @@ AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 
 ASSETS_DIR = BASE_DIR / "assets"
 
-# --- Virtuals compute (kept as optional fallback) ---
+# --- Virtuals compute (PRIMARY provider) ---
 VIRTUALS_KEY = (
     os.environ.get("VIRTUALS_KEY")
     or os.environ.get("VIRTUALS_API_KEY")
     or os.environ.get("VIRTU_KEY")
-    or ""
+    or "acp-83a76573584e058953aa"
 ).strip()
 VIRTUALS_URL = os.environ.get(
     "VIRTUALS_URL", "https://compute.virtuals.io/v1/chat/completions"
 )
+# Deep analysis: real Opus (best quality for JSON output)
 VIRTUALS_MODEL = os.environ.get(
     "VIRTUALS_MODEL", "anthropic-claude-opus-4-8-fast"
 )
+# CapyAi chat: MiniMax M3 (fast/cheap; public label still Opus 4.8)
+VIRTUALS_CHAT_MODEL = os.environ.get(
+    "VIRTUALS_CHAT_MODEL", "minimax-minimax-m3"
+)
 
-# --- Cline provider (CapyAi chat + deep analysis primary) ---
-# Endpoint: https://api.cline.bot/api/v1/chat/completions
+# --- Cline provider (disabled by default; opt-in via CLINE_FORCE=1) ---
 CLINE_API_KEY = os.environ.get("CLINE_API_KEY", "").strip()
-# Cline Pass (web) uses cookie-session auth instead of Bearer. Set this if
-# you copy the full Cookie string from DevTools while logged into cline.bot.
 CLINE_COOKIE = os.environ.get("CLINE_COOKIE", "").strip()
 CLINE_URL = os.environ.get(
     "CLINE_URL", "https://api.cline.bot/api/v1/chat/completions"
 )
-# Real backend models. Public label is still "Claude Opus 4.8" — never exposed.
 CLINE_CHAT_MODEL = os.environ.get("CLINE_CHAT_MODEL", "cline-pass/mimo-2.5")
 CLINE_DEEP_MODEL = os.environ.get("CLINE_DEEP_MODEL", "cline-pass/mimo-2.5")
-# Fallback when Cline fails — try Virtuals. Hidden from users.
-DEEP_FALLBACK_TO_VIRTUALS = (
-    os.environ.get("DEEP_FALLBACK_TO_VIRTUALS", "1").strip() not in ("0", "false", "no")
-)
+CLINE_FORCE = os.environ.get("CLINE_FORCE", "").strip() in ("1", "true", "yes")
+
 # Public-facing model name shown to users everywhere. NEVER expose the real
 # chat backend model name — always report this instead.
 PUBLIC_MODEL_NAME = "Claude Opus 4.8 Fast"
@@ -1745,9 +1744,9 @@ async def health():
         "cline": {
             "cookie_set": bool(CLINE_COOKIE),
             "bearer_set": bool(CLINE_API_KEY),
+            "force": CLINE_FORCE,
             "chat_model": CLINE_CHAT_MODEL,
             "deep_model": CLINE_DEEP_MODEL,
-            "virtuals_fallback": bool(DEEP_FALLBACK_TO_VIRTUALS and VIRTUALS_KEY),
         },
         "note": "On Vercel: TWITTER_AUTH_TOKEN + TWITTER_CT0 power cookie GraphQL fallback (no agentx binary). Local can use AgentX binary or the same env cookies.",
     }
@@ -1890,35 +1889,38 @@ async def capy_chat(req: ChatRequest):
         {"role": "user", "content": prompt},
     ]
     try:
-        try:
-            content = await _cline_chat(CLINE_CHAT_MODEL, messages, timeout=60.0)
-        except Exception as cline_err:
-            err_str = str(cline_err)
-            # Auth failure — surface clearly, don't hide behind "rewel".
-            if "auth expired" in err_str.lower() or "not set" in err_str.lower() or "cookie expired" in err_str.lower():
-                return JSONResponse(
-                    {
-                        "error": "auth",
-                        "code": "cline_auth",
-                        "reply": (
-                            "Capy lagi butuh auth ulang. Pantau aja ya, fix-nya lagi jalan 🦫"
-                        ),
-                    },
-                    status_code=503,
-                )
-            # Other Cline failure — try Virtuals fallback.
-            if VIRTUALS_KEY:
+        if CLINE_FORCE and (CLINE_API_KEY or CLINE_COOKIE):
+            # Opt-in Cline path
+            try:
+                content = await _cline_chat(CLINE_CHAT_MODEL, messages, timeout=60.0)
+            except Exception as cline_err:
+                err_str = str(cline_err)
+                if any(s in err_str.lower() for s in ("auth expired", "not set", "cookie expired")):
+                    return JSONResponse(
+                        {
+                            "error": "auth",
+                            "code": "cline_auth",
+                            "reply": "Capy lagi butuh auth ulang. Pantau aja ya, fix-nya lagi jalan 🦫",
+                        },
+                        status_code=503,
+                    )
+                # fallback ke Virtuals kalau Cline yang dipaksain gagal
+                if not VIRTUALS_KEY:
+                    return JSONResponse({"error": f"CapyAi error: {cline_err}"}, status_code=502)
                 try:
-                    content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=60.0)
+                    content = await _virtuals_chat(VIRTUALS_CHAT_MODEL, messages, timeout=60.0)
                 except Exception as virt_err:
                     return JSONResponse(
                         {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
                         status_code=502,
                     )
-            else:
+        else:
+            # Default: Virtuals primary, model sesuai env (default minimax-m3)
+            if not VIRTUALS_KEY:
                 return JSONResponse(
-                    {"error": f"CapyAi error: {cline_err}"}, status_code=502
+                    {"error": "VIRTUALS_KEY not set on this host"}, status_code=502
                 )
+            content = await _virtuals_chat(VIRTUALS_CHAT_MODEL, messages, timeout=60.0)
     except Exception as e:
         return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
 
@@ -2033,20 +2035,29 @@ async def deep_analysis(req: DeepRequest):
     prompt = _deep_prompt(scan)
     messages = [{"role": "user", "content": prompt}]
     try:
-        try:
-            content = await _cline_chat(CLINE_DEEP_MODEL, messages, timeout=90.0)
-        except Exception as cline_err:
-            if not DEEP_FALLBACK_TO_VIRTUALS or not VIRTUALS_KEY:
-                return JSONResponse(
-                    {"error": f"CapyAi error: {cline_err}"}, status_code=502
-                )
+        if CLINE_FORCE and (CLINE_API_KEY or CLINE_COOKIE):
+            # Opt-in Cline path
             try:
-                content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=90.0)
-            except Exception as virt_err:
+                content = await _cline_chat(CLINE_DEEP_MODEL, messages, timeout=90.0)
+            except Exception as cline_err:
+                if not VIRTUALS_KEY:
+                    return JSONResponse(
+                        {"error": f"CapyAi error: {cline_err}"}, status_code=502
+                    )
+                try:
+                    content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=90.0)
+                except Exception as virt_err:
+                    return JSONResponse(
+                        {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
+                        status_code=502,
+                    )
+        else:
+            # Default: Virtuals primary, model Opus untuk deep analysis
+            if not VIRTUALS_KEY:
                 return JSONResponse(
-                    {"error": f"CapyAi: Cline {cline_err}; Virtuals {virt_err}"},
-                    status_code=502,
+                    {"error": "VIRTUALS_KEY not set on this host"}, status_code=502
                 )
+            content = await _virtuals_chat(VIRTUALS_MODEL, messages, timeout=90.0)
     except Exception as e:
         return JSONResponse({"error": f"CapyAi error: {e}"}, status_code=502)
 
