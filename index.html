@@ -860,8 +860,14 @@
     }
 
     function buildShareText(data) {
-      // Caption santai, ajak temen cek — bukan status teknis
-      return `Hey, akun kalian udah di cek belum? Coba cek di sini deh ❤️🦫⭐\nhttps://keghost.vercel.app/`;
+      // Caption cantik, cozy, short invite (random biar gak monoton)
+      const lines = [
+        `Akun X-mu lagi aman… atau ke-ghost? 👀\nCek yuk di KeGhost ❤️🦫⭐\nhttps://keghost.vercel.app/`,
+        `Soft check dulu sebelum overthinking ✨\nKeGhost bantu cek shadowban-mu 🦫💛\nhttps://keghost.vercel.app/`,
+        `Hey bestie, udah cek shadowban belum? 🌸\nSantuy aja, capybara bantu ❤️🦫⭐\nhttps://keghost.vercel.app/`,
+        `Kalau engagement aneh, jangan panik dulu 🫧\nCoba cek di sini ya ❤️🦫⭐\nhttps://keghost.vercel.app/`,
+      ];
+      return lines[Math.floor(Math.random() * lines.length)];
     }
 
     function openComposeOnX(data) {
