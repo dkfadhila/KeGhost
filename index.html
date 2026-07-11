@@ -248,17 +248,6 @@
             </div>
           </div>
 
-          <!-- X-Moots Direktori -->
-          <div id="moots-section" class="surface rounded-[22px] shadow-soft p-4 hidden">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="font-display text-sm font-bold" style="color:var(--cocoa-700)" data-i18n="moots_title">X-Moots Direktori</div>
-                <div class="text-xs font-medium" style="color:var(--text-muted)" data-i18n="moots_sub">Daftar akun yang pernah di-scan komunitas</div>
-              </div>
-              <button id="btn-moots" type="button" class="text-xs font-extrabold px-3 py-1.5 rounded-full transition" style="background:var(--cocoa-400);color:#fff" data-i18n="btn_view">Lihat</button>
-            </div>
-          </div>
-
           <!-- Section 01: Cek Shadowban -->
           <div class="surface rounded-[22px] shadow-soft p-4 sm:p-5">
             <div class="flex items-center gap-2 mb-3">
@@ -438,7 +427,7 @@
         loading_title:'Capybara lagi nyari jejak…', loading_sub:'8 lapis audit sedang jalan ✨',
         error_title:'Yah capybara-nya bingung', btn_retry:'Coba lagi',
         followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
-        moots_title:'X-Moots Direktori', moots_sub:'Daftar akun yang pernah di-scan komunitas', btn_view:'Lihat',
+       
         sec01_title:'Cek shadowban', btn_playbook_text:'Buka playbook pemulihan akun', ringkasan:'RINGKASAN',
         grok_hint:'Jangan-jangan ada postingan kamu yang bermasalah di moderasi? Cek lewat tab Mod.', btn_mod_tab:'Buka tab Mod',
         btn_audit:'Audit ulang', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
@@ -458,7 +447,7 @@
         loading_title:'Capybara is on the trail…', loading_sub:'8 layer audit in progress ✨',
         error_title:'Oops capybara is confused', btn_retry:'Try again',
         followers:'followers', following:'following', posts:'posts', btn_resync:'↻ Resync',
-        moots_title:'X-Moots Directory', moots_sub:'Accounts scanned by the community', btn_view:'View',
+       
         sec01_title:'Shadowban check', btn_playbook_text:'Open account recovery playbook', ringkasan:'SUMMARY',
         grok_hint:'Maybe your posts have moderation issues? Check via Mod tab.', btn_mod_tab:'Open Mod tab',
         btn_audit:'Re-audit', btn_deep:'Deep scan', btn_memorizer:'Memorizer',
@@ -569,8 +558,7 @@
     document.getElementById('btn-deep-scan').addEventListener('click',()=>{if(lastResult){usernameInput.value=lastResult.username;checkShadowban(true);}});
     document.getElementById('btn-memorizer').addEventListener('click',openMemorizer);
     document.getElementById('btn-playbook').addEventListener('click',openPlaybook);
-    document.getElementById('btn-moots').addEventListener('click',()=>{loadRecent(true);});
-    document.getElementById('btn-recover-open').addEventListener('click',openPlaybook);
+        document.getElementById('btn-recover-open').addEventListener('click',openPlaybook);
     document.getElementById('btn-mem-clear').addEventListener('click',()=>{localStorage.removeItem('keghost_mem');renderMemorizer();});
 
     // Filter tabs
@@ -628,9 +616,7 @@
         document.getElementById('profile-protected').classList.toggle('hidden',!p.protected);
       } else pc.classList.add('hidden');
 
-      // Moots section
-      document.getElementById('moots-section').classList.toggle('hidden',!p.username);
-
+      
       // Nav username
       const navU=document.getElementById('nav-username');
       navU.textContent='@'+data.username;navU.classList.remove('hidden');
