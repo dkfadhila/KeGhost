@@ -814,6 +814,38 @@ def _cookie_headers() -> dict:
     }
 
 
+async def x_typeahead(username: str) -> dict:
+    """REST typeahead check — does @username appear in search suggestions?
+
+    Works on free-tier cookie auth (SearchTimeline GraphQL is deprecated, but
+    this REST endpoint still returns 200). Returns:
+      {"available": True/False, "found": True/False, "hits": int, "err": str}
+
+    - available=False → endpoint failed (auth/network), can't test
+    - found=True → username appears in typeahead → NOT suggestion banned
+    - found=False → username absent from suggestions → suggestion banned
+    """
+    headers = _cookie_headers()
+    if not headers:
+        return {"available": False, "found": False, "hits": 0, "err": "no cookies"}
+    uname = _safe_username(username)
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(
+                "https://x.com/i/api/1.1/search/typeahead.json",
+                params={"q": uname, "src": "search_box", "result_type": "users"},
+                headers=headers,
+            )
+        if r.status_code != 200:
+            return {"available": False, "found": False, "hits": 0,
+                    "err": f"typeahead HTTP {r.status_code}"}
+        users = (r.json() or {}).get("users") or []
+        found = any((u.get("screen_name") or "").lower() == uname for u in users)
+        return {"available": True, "found": found, "hits": len(users), "err": ""}
+    except Exception as e:
+        return {"available": False, "found": False, "hits": 0, "err": str(e)[:80]}
+
+
 async def x_graphql(op: str, variables: dict, extra_features: dict | None = None) -> dict:
     headers = _cookie_headers()
     if not headers:
@@ -1149,6 +1181,11 @@ async def fetch_via_cookies(username: str) -> dict | None:
         and _author_screen(t) != username
     ]
 
+    # 2026-07-13 (KIRA): Typeahead probe — REST endpoint still works on
+    # free tier (SearchTimeline GraphQL deprecated). This is our primary
+    # suggestion/search visibility signal when search_available=False.
+    typeahead = await x_typeahead(username)
+
     local_avatar = await cache_avatar(username, profile.get("avatar") or "")
     if local_avatar:
         profile["avatar"] = local_avatar
@@ -1169,6 +1206,13 @@ async def fetch_via_cookies(username: str) -> dict | None:
         # / GraphQL failed" from "search genuinely returned 0 results."
         "search_available": search_available,
         "search_err": search_err_msg,
+        # 2026-07-13 (KIRA): typeahead REST probe — works even when
+        # SearchTimeline GraphQL is 404. Primary signal for SUGGEST layer
+        # and fallback inference for SEARCH/POST/INDEX.
+        "typeahead_available": typeahead["available"],
+        "typeahead_found": typeahead["found"],
+        "typeahead_hits": typeahead["hits"],
+        "typeahead_err": typeahead["err"],
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
@@ -1295,6 +1339,14 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     # genuine deindex and an expired GraphQL query ID.
     search_available = bundle.get("search_available", True)
     search_err = bundle.get("search_err") or ""
+    # 2026-07-13 (KIRA): typeahead REST probe — works even when
+    # SearchTimeline GraphQL is 404 (deprecated for free tier). Primary
+    # signal for SUGGEST layer; fallback inference for SEARCH/POST/INDEX
+    # when search_available=False.
+    ta_available = bundle.get("typeahead_available", False)
+    ta_found = bundle.get("typeahead_found", False)
+    ta_hits = bundle.get("typeahead_hits", 0)
+    ta_err = bundle.get("typeahead_err") or ""
     hashtag = bundle.get("hashtag") or None
     hashtag_own = bundle.get("hashtag_own") or []
 
@@ -1326,18 +1378,25 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
         L1 = _layer("PROFILE", "safe", 92, "Profil ada dan publik")
 
     # --- Layer 2: SEARCH — from:username appears in search ---
-    # 2026-07-12 (KIRA): if search probe FAILED (QID expired, network err),
-    # we can't test search visibility. Report "untested" warning, NOT
-    # "banned" — an infrastructure failure is not a shadowban verdict.
+    # 2026-07-13 (KIRA): when SearchTimeline GraphQL is 404 (deprecated),
+    # fall back to typeahead REST probe. If username appears in typeahead
+    # suggestions, it's NOT search banned (high correlation between
+    # suggestion ban and search ban — they almost always co-occur).
     if is_protected:
         L2 = _layer("SEARCH", "warning", 50, "Protected — from: search terbatas secara normal")
-    elif not search_available:
-        L2 = _layer("SEARCH", "warning", 35, f"Search probe gagal — tidak bisa konfirmasi: {search_err[:60]}")
-    elif not has_posts and not has_from:
-        L2 = _layer("SEARCH", "warning", 45, "Tidak ada post publik terbaru untuk diuji di search")
     elif has_from:
         L2 = _layer("SEARCH", "safe", _clamp(80 + len(from_own) * 3, 80, 97),
                      f"from:{username} muncul di search ({len(from_own)} hit)")
+    elif ta_available and ta_found:
+        L2 = _layer("SEARCH", "safe", 78,
+                     f"Typeahead OK ({ta_hits} suggestions, @{username} muncul) — search visibility aman")
+    elif ta_available and not ta_found and has_posts:
+        L2 = _layer("SEARCH", "banned", 80,
+                     f"Post ada ({len(posts)}) tapi @{username} tidak muncul di typeahead — search ban")
+    elif not search_available and not ta_available:
+        L2 = _layer("SEARCH", "warning", 35, f"Search + typeahead probe gagal — tidak bisa konfirmasi: {search_err[:50]}")
+    elif not has_posts and not has_from:
+        L2 = _layer("SEARCH", "warning", 45, "Tidak ada post publik terbaru untuk diuji di search")
     elif has_posts:
         L2 = _layer("SEARCH", "banned", _clamp(82 - len(posts) * 2, 72, 88),
                      f"Post ada ({len(posts)}) tapi from:{username} kosong — search suggestion ban")
@@ -1345,20 +1404,26 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
         L2 = _layer("SEARCH", "warning", 50, "Sampel tipis — tidak bisa konfirmasi")
 
     # --- Layer 3: SUGGEST — @username mention visibility / typeahead ---
-    # 2026-07-12 (KIRA): removed len(people_own) from mention_hits.
-    # people_own = target's OWN tweets in @username search (self-mentions).
-    # Adding it inflated SUGGEST for accounts that self-reply a lot.
-    # Only count tweets by OTHERS that mention the user.
+    # 2026-07-13 (KIRA): typeahead REST is now the PRIMARY signal for this
+    # layer. SearchTimeline GraphQL is 404 (deprecated), but typeahead
+    # still works. If username appears in typeahead suggestions = NOT
+    # suggestion banned. This is the same method XGrind uses.
     mention_hits = len([m for m in mentioned if _author_screen(m) != username])
-    if mention_hits >= 1:
+    if ta_available and ta_found:
+        L3 = _layer("SUGGEST", "safe", _clamp(80 + min(ta_hits * 2, 15), 80, 96),
+                     f"@{username} muncul di typeahead ({ta_hits} suggestions) — suggestion ban: TIDAK")
+    elif mention_hits >= 1:
         L3 = _layer("SUGGEST", "safe", _clamp(78 + mention_hits * 3, 78, 95),
                      f"@{username} muncul di mention search ({mention_hits} hit)")
     elif has_from:
         L3 = _layer("SUGGEST", "safe", 72, "Username resolve lewat search observer")
     elif is_protected:
         L3 = _layer("SUGGEST", "warning", 50, "Protected — mention search terbatas")
-    elif not search_available:
-        L3 = _layer("SUGGEST", "warning", 35, "Search probe gagal — tidak bisa konfirmasi mention visibility")
+    elif ta_available and not ta_found and has_posts:
+        L3 = _layer("SUGGEST", "banned", 82,
+                     f"@{username} tidak muncul di typeahead ({ta_hits} suggestions) — suggestion ban")
+    elif not search_available and not ta_available:
+        L3 = _layer("SUGGEST", "warning", 35, "Search + typeahead probe gagal — tidak bisa konfirmasi mention visibility")
     elif has_posts:
         L3 = _layer("SUGGEST", "warning", 55, "Profil ada tapi @mention tidak muncul di search surface")
     else:
@@ -1428,9 +1493,9 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Engagement wajar (avg views {int(avg_views)}, like ratio {like_ratio:.3f})")
 
     # --- Layer 7: POST — recent post visibility / indexability ---
-    # 2026-07-12 (KIRA): if search probe failed, can't determine if posts
-    # are indexed. Posts exist (timeline fetch OK) but search visibility
-    # untested. Report "warning: untested" not "banned: ghost ban."
+    # 2026-07-13 (KIRA): when search_available=False, use typeahead as
+    # fallback inference. If typeahead found = posts are likely indexed
+    # (suggestion visibility and post indexability are correlated).
     if not has_posts:
         L7 = _layer("POST", "warning", 45, "Tidak ada post terbaru terlihat")
     elif has_from:
@@ -1438,6 +1503,12 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Post terlihat & terindeks ({len(posts)} post, {len(from_own)} di search)")
     elif is_protected:
         L7 = _layer("POST", "warning", 50, "Protected — post visibility terbatas")
+    elif ta_available and ta_found:
+        L7 = _layer("POST", "safe", 76,
+                     f"Post ada ({len(posts)}), typeahead OK — post visibility aman (inferred)")
+    elif ta_available and not ta_found:
+        L7 = _layer("POST", "banned", _clamp(72 + min(len(posts) * 2, 15), 72, 85),
+                     f"Post ada ({len(posts)}) tapi typeahead kosong — post tidak terindeks (inferred)")
     elif not search_available:
         L7 = _layer("POST", "warning", 40, f"Post ada ({len(posts)}) tapi search probe gagal — tidak bisa konfirmasi index")
     else:
@@ -1445,18 +1516,23 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Post ada ({len(posts)}) tapi tidak muncul di search — ghost/index ban")
 
     # --- Layer 8: INDEX — search index presence ---
-    # 2026-07-12 (KIRA): INDEX tests if the username appears in X's search
-    # index. bare_hits_count = total results from bare username search (by
-    # anyone, not just target). If ANY results come back, the username IS
-    # indexed. Old code checked bare_own (target's own tweets in bare search)
-    # which is 0 for most accounts (they don't mention their own username).
+    # 2026-07-13 (KIRA): when SearchTimeline is 404 (bare_hits_count=0
+    # because search failed, not because username is deindexed), use
+    # typeahead as fallback. If typeahead found = username IS in search
+    # index (typeahead pulls from the same index).
     if bare_hits_count >= 1:
         L8 = _layer("INDEX", "safe", _clamp(78 + min(bare_hits_count * 3, 17), 78, 95),
                      f"Username muncul di search index ({bare_hits_count} hit)")
     elif is_protected:
         L8 = _layer("INDEX", "warning", 50, "Protected — index terbatas")
-    elif not search_available:
-        L8 = _layer("INDEX", "warning", 35, "Search probe gagal — tidak bisa konfirmasi index presence")
+    elif ta_available and ta_found:
+        L8 = _layer("INDEX", "safe", 77,
+                     f"@{username} muncul di typeahead — search index OK (inferred)")
+    elif ta_available and not ta_found and has_posts:
+        L8 = _layer("INDEX", "banned", _clamp(70 + min(len(posts) * 2, 15), 70, 85),
+                     f"Profil ada tapi @{username} tidak di typeahead — deindex (inferred)")
+    elif not search_available and not ta_available:
+        L8 = _layer("INDEX", "warning", 35, "Search + typeahead probe gagal — tidak bisa konfirmasi index presence")
     elif has_from:
         L8 = _layer("INDEX", "warning", 60, "from: search OK tapi username search kosong — mungkin partial deindex")
     elif has_posts:
@@ -1651,6 +1727,10 @@ async def check_with_agentx(username: str) -> dict:
             tag_hits = []
         hashtag_own = authored_by_target(tag_hits)
 
+    # 2026-07-13 (KIRA): Typeahead REST probe — works even when
+    # SearchTimeline GraphQL is 404. Also add to AgentX path for parity.
+    typeahead = await x_typeahead(username)
+
     # Build bundle and run 8-layer audit
     bundle = {
         "profile": profile,
@@ -1665,6 +1745,11 @@ async def check_with_agentx(username: str) -> dict:
         # search probes failed. Check if any probe returned ok.
         "search_available": from_env.get("ok") or people_env.get("ok") or bare_env.get("ok"),
         "search_err": "",
+        # 2026-07-13 (KIRA): typeahead REST probe
+        "typeahead_available": typeahead["available"],
+        "typeahead_found": typeahead["found"],
+        "typeahead_hits": typeahead["hits"],
+        "typeahead_err": typeahead["err"],
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
