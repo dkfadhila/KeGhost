@@ -763,9 +763,12 @@ def build_profile(user: dict) -> dict:
 # --- Cookie HTTP fallback (works on Vercel without agentx binary) ---
 X_BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
 X_QID = {
-    "UserByScreenName": os.environ.get("AGENTX_QID_UserByScreenName", "1VOOyvKkiI3FMmkeDNxM9A"),
-    "UserTweets": os.environ.get("AGENTX_QID_UserTweets", "q6xj5bs0hapm9309hexA_g"),
-    "SearchTimeline": os.environ.get("AGENTX_QID_SearchTimeline", "VhUd6vHVmLBcw0uX-6jMLA"),
+    # 2026-07-12 (KIRA): updated QIDs from main.4b8dc5fa.js bundle.
+    # Old QIDs: UserByScreenName=1VOOyvKkiI3FMmkeDNxM9A, UserTweets=q6xj5bs0hapm9309hexA_g
+    # SearchTimeline=VhUd6vHVmLBcw0uX-6jMLA (deprecated by X — returns 404 for all accounts)
+    "UserByScreenName": os.environ.get("AGENTX_QID_UserByScreenName", "2qvSHpkWTMS9i0zJAwDNiA"),
+    "UserTweets": os.environ.get("AGENTX_QID_UserTweets", "hr4gzZONlq23okjU8fIe_A"),
+    "SearchTimeline": os.environ.get("AGENTX_QID_SearchTimeline", "Bcw3RzK-PatNAmbnw54hFw"),
 }
 X_FEATURES = {
     "rweb_tipjar_consumption_enabled": True,
@@ -1068,19 +1071,26 @@ async def fetch_via_cookies(username: str) -> dict | None:
     from_own = []
     people_own = []
     bare_own = []
+    # 2026-07-12 (KIRA): track whether SearchTimeline probe actually
+    # succeeded. If the QID is expired (404) or GraphQL fails, search
+    # results are empty NOT because the account is shadowbanned — but
+    # because we couldn't run the test. audit_8_layers must distinguish
+    # "search failed" (warning: untested) from "search returned empty"
+    # (banned: genuinely deindexed). Old code conflated both → every
+    # account showed "banned" when QID rotated.
+    search_available = True
+    search_err_msg = ""
+
     try:
         s1 = await x_graphql(
             "SearchTimeline",
             {"rawQuery": f"from:{username}", "count": 10, "querySource": "typed_query", "product": "Latest"},
         )
         from_own = [t for t in _extract_tweets_from_timeline(s1) if _author_screen(t) == username]
-    except Exception:
-        # 2026-07-12 (KIRA): removed `from_own = posts[:5]` fallback.
-        # Setting from_own to timeline posts made has_from=True, which
-        # triggered false "safe" on SEARCH, POST, and INDEX layers even
-        # when SearchTimeline was broken. Leave empty — audit falls through
-        # to the appropriate warning/banned state for untested search.
+    except Exception as e:
         from_own = []
+        search_available = False
+        search_err_msg = str(e)[:120]
 
     try:
         s2 = await x_graphql(
@@ -1089,9 +1099,12 @@ async def fetch_via_cookies(username: str) -> dict | None:
         )
         people_hits_raw = _extract_tweets_from_timeline(s2)
         people_own = [t for t in people_hits_raw if _author_screen(t) == username]
-    except Exception:
+    except Exception as e:
         people_hits_raw = []
         people_own = []
+        if not search_err_msg:
+            search_err_msg = str(e)[:120]
+        # don't set search_available=False again if already set
 
     # Bare username search (for INDEX layer)
     try:
@@ -1152,6 +1165,10 @@ async def fetch_via_cookies(username: str) -> dict | None:
         "bare_own": bare_own,
         # 2026-07-12 (KIRA): raw count for INDEX layer
         "bare_hits_count": len(bare_hits_raw),
+        # 2026-07-12 (KIRA): search probe health — distinguish "QID expired
+        # / GraphQL failed" from "search genuinely returned 0 results."
+        "search_available": search_available,
+        "search_err": search_err_msg,
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
@@ -1272,6 +1289,12 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     # tweets in those results (which is 0 for most accounts — they don't
     # mention their own username in tweets).
     bare_hits_count = bundle.get("bare_hits_count") or len(bare_own)
+    # 2026-07-12 (KIRA): search_available — did the search probe actually
+    # succeed? If False, empty search results mean "we couldn't test" not
+    # "the account is shadowbanned." This is the difference between a
+    # genuine deindex and an expired GraphQL query ID.
+    search_available = bundle.get("search_available", True)
+    search_err = bundle.get("search_err") or ""
     hashtag = bundle.get("hashtag") or None
     hashtag_own = bundle.get("hashtag_own") or []
 
@@ -1303,8 +1326,13 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
         L1 = _layer("PROFILE", "safe", 92, "Profil ada dan publik")
 
     # --- Layer 2: SEARCH — from:username appears in search ---
+    # 2026-07-12 (KIRA): if search probe FAILED (QID expired, network err),
+    # we can't test search visibility. Report "untested" warning, NOT
+    # "banned" — an infrastructure failure is not a shadowban verdict.
     if is_protected:
         L2 = _layer("SEARCH", "warning", 50, "Protected — from: search terbatas secara normal")
+    elif not search_available:
+        L2 = _layer("SEARCH", "warning", 35, f"Search probe gagal — tidak bisa konfirmasi: {search_err[:60]}")
     elif not has_posts and not has_from:
         L2 = _layer("SEARCH", "warning", 45, "Tidak ada post publik terbaru untuk diuji di search")
     elif has_from:
@@ -1329,6 +1357,8 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
         L3 = _layer("SUGGEST", "safe", 72, "Username resolve lewat search observer")
     elif is_protected:
         L3 = _layer("SUGGEST", "warning", 50, "Protected — mention search terbatas")
+    elif not search_available:
+        L3 = _layer("SUGGEST", "warning", 35, "Search probe gagal — tidak bisa konfirmasi mention visibility")
     elif has_posts:
         L3 = _layer("SUGGEST", "warning", 55, "Profil ada tapi @mention tidak muncul di search surface")
     else:
@@ -1398,6 +1428,9 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Engagement wajar (avg views {int(avg_views)}, like ratio {like_ratio:.3f})")
 
     # --- Layer 7: POST — recent post visibility / indexability ---
+    # 2026-07-12 (KIRA): if search probe failed, can't determine if posts
+    # are indexed. Posts exist (timeline fetch OK) but search visibility
+    # untested. Report "warning: untested" not "banned: ghost ban."
     if not has_posts:
         L7 = _layer("POST", "warning", 45, "Tidak ada post terbaru terlihat")
     elif has_from:
@@ -1405,6 +1438,8 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Post terlihat & terindeks ({len(posts)} post, {len(from_own)} di search)")
     elif is_protected:
         L7 = _layer("POST", "warning", 50, "Protected — post visibility terbatas")
+    elif not search_available:
+        L7 = _layer("POST", "warning", 40, f"Post ada ({len(posts)}) tapi search probe gagal — tidak bisa konfirmasi index")
     else:
         L7 = _layer("POST", "banned", _clamp(72 + min(len(posts) * 2, 15), 72, 85),
                      f"Post ada ({len(posts)}) tapi tidak muncul di search — ghost/index ban")
@@ -1420,6 +1455,8 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Username muncul di search index ({bare_hits_count} hit)")
     elif is_protected:
         L8 = _layer("INDEX", "warning", 50, "Protected — index terbatas")
+    elif not search_available:
+        L8 = _layer("INDEX", "warning", 35, "Search probe gagal — tidak bisa konfirmasi index presence")
     elif has_from:
         L8 = _layer("INDEX", "warning", 60, "from: search OK tapi username search kosong — mungkin partial deindex")
     elif has_posts:
@@ -1624,6 +1661,10 @@ async def check_with_agentx(username: str) -> dict:
         # 2026-07-12 (KIRA): raw count for INDEX layer — total bare username
         # search results (by anyone), not just target's own tweets.
         "bare_hits_count": len(bare_hits),
+        # 2026-07-12 (KIRA): AgentX path — search is available unless all
+        # search probes failed. Check if any probe returned ok.
+        "search_available": from_env.get("ok") or people_env.get("ok") or bare_env.get("ok"),
+        "search_err": "",
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
