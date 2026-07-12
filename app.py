@@ -1625,19 +1625,19 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
 
 
 def _health_score(layers: list) -> int:
-    """Aggregate 8-layer status to 0-100 score. 8 layers tetap ada, ini bonus."""
+    """Aggregate 8-layer status to 0-100 score. 8 layers tetap ada, ini bonus.
+    Formula: safe=100, warning=45, banned=5. Average across 8 layers."""
     if not layers:
         return 0
     total = 0
     for l in layers:
         s = l.get("status", "warning")
-        c = l.get("confidence", 50) / 100.0
         if s == "safe":
-            total += int(100 * c)
+            total += 100
         elif s == "warning":
-            total += int(50 * c)
-        else:  # banned
-            total += int(5 * c)
+            total += 45
+        else:  # banned / limited
+            total += 5
     return min(100, max(0, total // len(layers)))
 
 
