@@ -430,21 +430,26 @@ function togglePanel(name){
   // Toggle this one
   const inner=el.querySelector(".an-wrap,.gh-wrap,.cp-wrap");
   if(!inner) return;
-  const isOpen=inner.style.display==="block"||inner.classList.contains("show");
-  if(isOpen){
-    inner.style.display="none";
-    inner.classList.remove("show");
-  } else {
+  // For ghost: if data not loaded yet and opening, load it
+  const isHidden=inner.style.display==="none"||(!inner.style.display&&!inner.classList.contains("show"));
+  if(isHidden){
     inner.style.display="block";
     inner.classList.add("show");
+  } else {
+    inner.style.display="none";
+    inner.classList.remove("show");
   }
-  // Update menu active state
-  document.querySelectorAll(".fm-btn").forEach(b=>b.classList.remove("active"));
-  if(event&&event.target) event.target.classList.add("active");
   // Lazy load ghost followers on first open
-  if(name==="ghost"&&inner&&!inner.dataset.loaded){
+  if(name==="ghost"&&!inner.dataset.loaded){
+    inner.dataset.loaded="1";
+    inner.style.display="block";
+    inner.classList.add("show");
     const uname=LAST?.username||LAST?.profile?.username||"";
     if(uname) loadGhostFollowers(uname);
+    // Update menu active state
+    document.querySelectorAll(".fm-btn").forEach(b=>b.classList.remove("active"));
+    if(event&&event.target) event.target.classList.add("active");
+    return; // skip toggle — loadGhostFollowers will set display
   }
 }
 
