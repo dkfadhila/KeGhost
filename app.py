@@ -789,6 +789,10 @@ X_QID = {
     "UserByScreenName": os.environ.get("AGENTX_QID_UserByScreenName", "2qvSHpkWTMS9i0zJAwDNiA"),
     "UserTweets": os.environ.get("AGENTX_QID_UserTweets", "hr4gzZONlq23okjU8fIe_A"),
     "SearchTimeline": os.environ.get("AGENTX_QID_SearchTimeline", "Bcw3RzK-PatNAmbnw54hFw"),
+    # 2026-07-13 (KIRA): Following/Followers QIDs from main.4b8dc5fa.js
+    # REST friends/list.json is deprecated (404), GraphQL Following still works.
+    # GraphQL Followers is 404 — use REST followers/list.json instead.
+    "Following": os.environ.get("AGENTX_QID_Following", "eNoXdfXv5rU75RBzlmfuPA"),
 }
 X_FEATURES = {
     "rweb_tipjar_consumption_enabled": True,
@@ -2161,6 +2165,290 @@ async def scan_history(username: str):
         "count": len(scans),
         "first_scan": scans[0]["timestamp"] if scans else "",
         "last_scan": scans[-1]["timestamp"] if scans else "",
+    }
+
+
+# ============================================================
+# NON-FOLLOWERS — who doesn't follow back the target
+# ============================================================
+
+# In-memory cache: username -> {following, followers_ids, cursors, meta}
+# TTL 30 min. Each click fetches 1 batch (200 following + 200 followers),
+# computes non-followers incrementally, returns next 5.
+NF_CACHE: dict = {}
+NF_TTL_SEC = 1800
+
+
+def _nf_expired(entry: dict) -> bool:
+    return time.time() - entry.get("_ts", 0) > NF_TTL_SEC
+
+
+async def _fetch_following_graphql(user_id: str, cursor: str = "") -> dict:
+    """Fetch one page of following via GraphQL (REST friends/list.json is deprecated).
+    Returns {users: [{id, screen_name, name, followers, verified, avatar}], next_cursor, error}.
+    """
+    headers = _cookie_headers()
+    if not headers:
+        return {"users": [], "next_cursor": "", "error": "no cookies"}
+    qid = X_QID.get("Following")
+    if not qid:
+        return {"users": [], "next_cursor": "", "error": "no Following QID"}
+    features = json.dumps(X_FEATURES, separators=(",", ":"))
+    variables = json.dumps(
+        {"userId": user_id, "count": 100, "cursor": cursor, "includePromotedContent": False},
+        separators=(",", ":"),
+    )
+    import urllib.parse
+    qs = urllib.parse.urlencode({"variables": variables, "features": features})
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            r = await client.get(
+                f"https://x.com/i/api/graphql/{qid}/Following?{qs}",
+                headers=headers,
+            )
+        if r.status_code != 200:
+            return {"users": [], "next_cursor": "", "error": f"HTTP {r.status_code}"}
+        d = r.json()
+        timeline = (
+            d.get("data", {}).get("user", {}).get("result", {})
+            .get("timeline", {}).get("timeline", {})
+        )
+        instructions = timeline.get("instructions", [])
+        entries = []
+        for inst in instructions:
+            entries.extend(inst.get("entries", []))
+        # Extract users + find bottom cursor
+        users = []
+        next_cursor = ""
+        for e in entries:
+            # User entries have entryId starting with "user-"
+            if "user-" in (e.get("entryId") or ""):
+                result = (
+                    e.get("content", {}).get("itemContent", {})
+                    .get("user_results", {}).get("result", {})
+                )
+                core = result.get("core") or {}
+                legacy = result.get("legacy") or {}
+                uid = str(result.get("rest_id") or "")
+                sn = core.get("screen_name") or legacy.get("screen_name") or ""
+                if sn and uid:
+                    users.append({
+                        "id": uid,
+                        "screen_name": sn,
+                        "name": core.get("name") or legacy.get("name") or "",
+                        "followers": legacy.get("followers_count") or 0,
+                        "verified": result.get("is_blue_verified") or legacy.get("verified") or False,
+                        "avatar": (legacy.get("profile_image_url_https") or "").replace("_normal", "_bigger"),
+                    })
+            # Cursor entries have entryId starting with "cursor-bottom-"
+            if "cursor-bottom-" in (e.get("entryId") or ""):
+                content = e.get("content", {})
+                # Cursor value is in content.value or content.itemContent.value
+                next_cursor = content.get("value") or ""
+                if not next_cursor:
+                    ic = content.get("itemContent", {})
+                    next_cursor = ic.get("value") or ""
+        return {"users": users, "next_cursor": next_cursor, "error": ""}
+    except Exception as e:
+        return {"users": [], "next_cursor": "", "error": str(e)[:80]}
+
+
+async def _fetch_rest_list(endpoint: str, screen_name: str, cursor: str = "", count: int = 100) -> dict:
+    """Fetch one page of friends/list.json or followers/list.json via REST."""
+    headers = _cookie_headers()
+    if not headers:
+        return {"users": [], "next_cursor": "", "error": "no cookies"}
+    params = {
+        "screen_name": screen_name,
+        "count": count,
+        "skip_status": True,
+        "include_user_entities": False,
+    }
+    if cursor and cursor != "0":
+        params["cursor"] = cursor
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            r = await client.get(
+                f"https://x.com/i/api/1.1/{endpoint}",
+                params=params, headers=headers,
+            )
+        if r.status_code != 200:
+            return {"users": [], "next_cursor": "", "error": f"HTTP {r.status_code}"}
+        data = r.json()
+        users = data.get("users") or []
+        nc = str(data.get("next_cursor_str") or data.get("next_cursor") or "")
+        return {"users": users, "next_cursor": nc, "error": ""}
+    except Exception as e:
+        return {"users": [], "next_cursor": "", "error": str(e)[:80]}
+
+
+@app.get("/api/non-followers/{username}")
+async def non_followers(username: str, batch: int = 0):
+    """Fetch non-followers (people target follows but don't follow back).
+
+    Incremental: each call fetches 1 batch of following + followers (200 each),
+    accumulates in cache, returns next 5 non-followers + progress estimate.
+    batch=0 starts fresh. Subsequent batches continue from cursor.
+    """
+    uname = _safe_username(username)
+    if not uname:
+        return JSONResponse({"error": "invalid username"}, status_code=400)
+
+    now = time.time()
+
+    # Get or create cache entry
+    if batch == 0 or uname not in NF_CACHE or _nf_expired(NF_CACHE[uname]):
+        NF_CACHE[uname] = {
+            "user_id": "",
+            "following": [],
+            "followers_ids": set(),
+            "f_cursor": "",
+            "fo_cursor": "",
+            "f_done": False,
+            "fo_done": False,
+            "f_count": 0,
+            "fo_count": 0,
+            "f_total": 0,
+            "fo_total": 0,
+            "batches_done": 0,
+            "_ts": now,
+            "served": 0,
+        }
+
+    entry = NF_CACHE[uname]
+
+    # First call: get profile for totals + user_id
+    if not entry["user_id"]:
+        features = json.dumps(X_FEATURES, separators=(",", ":"))
+        import urllib.parse
+        v = json.dumps({"screen_name": uname, "withSafetyModeUserGreeting": True}, separators=(",", ":"))
+        qs = urllib.parse.urlencode({"variables": v, "features": features})
+        try:
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+                r = await client.get(
+                    f"https://x.com/i/api/graphql/{X_QID['UserByScreenName']}/UserByScreenName?{qs}",
+                    headers=_cookie_headers(),
+                )
+            if r.status_code == 200:
+                user = (r.json().get("data") or {}).get("user", {}).get("result", {})
+                legacy = user.get("legacy") or {}
+                entry["user_id"] = str(user.get("rest_id") or "")
+                entry["f_total"] = int(legacy.get("friends_count") or 0)
+                entry["fo_total"] = int(legacy.get("followers_count") or 0)
+        except Exception:
+            pass
+
+    # Fetch 1 batch of following via GraphQL (if not done)
+    if not entry["f_done"] and entry["user_id"]:
+        result = await _fetch_following_graphql(entry["user_id"], entry["f_cursor"])
+        if result["error"]:
+            return JSONResponse({
+                "error": result["error"],
+                "username": uname,
+                "progress": _nf_progress(entry),
+            }, status_code=502)
+        entry["following"].extend(result["users"])
+        entry["f_cursor"] = result["next_cursor"]
+        entry["f_count"] = len(entry["following"])
+        if not result["next_cursor"]:
+            entry["f_done"] = True
+
+    # Fetch 1 batch of followers via REST (only need IDs)
+    if not entry["fo_done"]:
+        result = await _fetch_rest_list("followers/list.json", uname, entry["fo_cursor"])
+        if result["error"]:
+            return JSONResponse({
+                "error": result["error"],
+                "username": uname,
+                "progress": _nf_progress(entry),
+            }, status_code=502)
+        for u in result["users"]:
+            entry["followers_ids"].add(str(u.get("id_str") or u.get("id") or ""))
+        entry["fo_cursor"] = result["next_cursor"]
+        entry["fo_count"] = len(entry["followers_ids"])
+        if not result["next_cursor"] or result["next_cursor"] == "0":
+            entry["fo_done"] = True
+
+    entry["batches_done"] += 1
+
+    # Compute non-followers from what we have so far
+    non_followers = []
+    for u in entry["following"]:
+        uid = str(u.get("id") or "")
+        if uid and uid not in entry["followers_ids"]:
+            non_followers.append(u)
+
+    # Return next 5 (offset by served count)
+    offset = entry["served"]
+    page = non_followers[offset:offset + 5]
+    entry["served"] = offset + len(page)
+
+    # If both lists done and we've served all, mark complete
+    all_done = entry["f_done"] and entry["fo_done"]
+    total_nf = len(non_followers)
+    has_more = offset + 5 < total_nf or not all_done
+
+    return {
+        "username": uname,
+        "non_followers": [
+            {
+                "screen_name": u.get("screen_name") or "",
+                "name": u.get("name") or "",
+                "avatar": u.get("avatar") or "",
+                "followers": u.get("followers") or 0,
+                "verified": u.get("verified") or False,
+            }
+            for u in page
+        ],
+        "total_non_followers": total_nf,
+        "served": entry["served"],
+        "has_more": has_more,
+        "all_done": all_done,
+        "progress": _nf_progress(entry),
+    }
+
+
+def _nf_progress(entry: dict) -> dict:
+    """Estimate progress + time remaining."""
+    f_total = entry["f_total"]
+    fo_total = entry["fo_total"]
+    f_done = entry["f_done"]
+    fo_done = entry["fo_done"]
+    f_count = entry["f_count"]
+    fo_count = entry["fo_count"]
+    batches = entry["batches_done"]
+
+    # Progress percentage
+    if f_total > 0 or fo_total > 0:
+        pct = min(100, int(((f_count + fo_count) / max(f_total + fo_total, 1)) * 100))
+    else:
+        pct = 0
+
+    # Estimate: each batch takes ~2s (2 REST calls). Remaining batches.
+    if f_done and fo_done:
+        est_sec = 0
+    else:
+        remaining_f = max(0, (f_total - f_count)) // 100 if not f_done else 0
+        remaining_fo = max(0, (fo_total - fo_count)) // 100 if not fo_done else 0
+        remaining_batches = max(remaining_f, remaining_fo)
+        est_sec = remaining_batches * 3
+
+    if est_sec < 60:
+        est_str = f"~{est_sec}s"
+    else:
+        est_str = f"~{est_sec // 60}m {est_sec % 60}s"
+
+    return {
+        "pct": pct,
+        "est_sec": est_sec,
+        "est_str": est_str,
+        "following_fetched": f_count,
+        "following_total": f_total,
+        "followers_fetched": fo_count,
+        "followers_total": fo_total,
+        "batches_done": batches,
+        "following_done": f_done,
+        "followers_done": fo_done,
     }
 
 

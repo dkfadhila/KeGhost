@@ -165,6 +165,7 @@ function renderResult(data){
   renderGrid();
   renderRecovery(data.recovery||[]);
   loadTimeline(data.username||(data.profile&&data.profile.username)||"");
+  renderNonFollowersButton(data.username||(data.profile&&data.profile.username)||"");
   // reset deep panel
   $("#deepPanel").classList.remove("show");
   $("#deepPanel").innerHTML="";
@@ -254,6 +255,104 @@ async function loadTimeline(username){
     </div>`;
   }catch(e){
     el.innerHTML="";
+  }
+}
+
+/* ---------- non-followers ---------- */
+let NF_BATCH=0, NF_LOADING=false;
+
+function renderNonFollowersButton(username){
+  const el=$("#nonFollowersSection");
+  if(!el) return;
+  NF_BATCH=0; NF_LOADING=false;
+  el.innerHTML=`<div class="nf-wrap">
+    <button class="nf-btn" id="nfBtn" onclick="loadNonFollowers('${escapeAttr(username)}')">
+      👀 Cek siapa yang belum follow back
+    </button>
+    <div class="nf-progress" id="nfProgress">
+      <div class="nf-bar"><div class="nf-bar-fill" id="nfBarFill" style="width:0%"></div></div>
+      <div class="nf-bar-text">
+        <span id="nfBarLeft">Mengambil data...</span>
+        <span id="nfBarRight"></span>
+      </div>
+    </div>
+    <div class="nf-list" id="nfList"></div>
+  </div>`;
+}
+
+async function loadNonFollowers(username){
+  if(NF_LOADING) return;
+  NF_LOADING=true;
+  const btn=$("#nfBtn");
+  const prog=$("#nfProgress");
+  const fill=$("#nfBarFill");
+  const left=$("#nfBarLeft");
+  const right=$("#nfBarRight");
+  const list=$("#nfList");
+
+  if(btn) btn.disabled=true;
+  if(prog) prog.classList.add("show");
+
+  try{
+    const r=await fetch(`/api/non-followers/${encodeURIComponent(username)}?batch=${NF_BATCH}`);
+    const data=await r.json();
+
+    if(data.error){
+      if(left) left.textContent="Error: "+data.error;
+      if(btn) btn.disabled=false;
+      NF_LOADING=false;
+      return;
+    }
+
+    const p=data.progress||{};
+    if(fill) fill.style.width=(p.pct||0)+"%";
+    if(left) left.textContent=`Following ${p.following_fetched||0}/${p.following_total||0} · Followers ${p.followers_fetched||0}/${p.followers_total||0}`;
+    if(right) right.textContent=p.est_str||"";
+
+    // Render non-followers
+    if(data.non_followers&&data.non_followers.length){
+      let html="";
+      data.non_followers.forEach(u=>{
+        const ava=u.avatar?`<img src="${u.avatar}" onerror="this.src='/assets/logo.png'" alt=""/>`:`<img src="/assets/logo.png" alt=""/>`;
+        html+=`<div class="nf-user">
+          ${ava}
+          <div class="nf-user-info">
+            <div class="nf-user-name">${escapeHtml(u.name||u.screen_name)} ${u.verified?"✓":""}</div>
+            <div class="nf-user-handle">@${escapeHtml(u.screen_name)}</div>
+          </div>
+          <div class="nf-user-stats">${fmt(u.followers)} followers</div>
+        </div>`;
+      });
+      list.insertAdjacentHTML("beforeend",html);
+    }
+
+    NF_BATCH++;
+
+    if(data.has_more){
+      // Show "load more" button
+      const existingBtn=list.querySelector(".nf-more-btn");
+      if(existingBtn) existingBtn.remove();
+      const done=data.all_done;
+      list.insertAdjacentHTML("beforeend",
+        `<button class="nf-more-btn" onclick="loadNonFollowers('${escapeAttr(username)}')">
+          ${done?"Tampilkan 5 lagi":"Muat 5 lagi... (masih mengambil data)"}
+        </button>`);
+      if(btn) btn.style.display="none";
+    } else {
+      // All done
+      const existingBtn=list.querySelector(".nf-more-btn");
+      if(existingBtn) existingBtn.remove();
+      list.insertAdjacentHTML("beforeend",
+        `<div class="nf-done">✅ Selesai — total ${data.total_non_followers} akun belum follow back</div>`);
+      if(btn) btn.style.display="none";
+    }
+
+    if(right) right.textContent=data.total_non_followers?`${data.total_non_followers} belum follow back`:"";
+
+  }catch(e){
+    if(left) left.textContent="Error: "+(e.message||e);
+  }finally{
+    NF_LOADING=false;
   }
 }
 
