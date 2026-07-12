@@ -163,6 +163,8 @@ function renderResult(data){
 
   window.__layers=data.layers||data.tests||[];
   renderGrid();
+  renderHealthScore(data.health_score||0);
+  renderFeatureMenu(data.username||(data.profile&&data.profile.username)||"", data.analytics||{});
   renderRecovery(data.recovery||[]);
   loadTimeline(data.username||(data.profile&&data.profile.username)||"");
   renderNonFollowersButton(data.username||(data.profile&&data.profile.username)||"");
@@ -353,6 +355,217 @@ async function loadNonFollowers(username){
     if(left) left.textContent="Error: "+(e.message||e);
   }finally{
     NF_LOADING=false;
+  }
+}
+
+/* ---------- health score ---------- */
+function renderHealthScore(score){
+  const el=$("#healthScoreSection");
+  if(!el) return;
+  const s=Math.max(0,Math.min(100,score||0));
+  const circ=2*Math.PI*28;
+  const offset=circ-(s/100)*circ;
+  const color=s>=70?'#7ab17a':s>=40?'#e8c84b':'#e89b9b';
+  const label=s>=70?'Akun sehat':s>=40?'Perlu perhatian':'Akun bermasalah';
+  el.innerHTML=`<div class="hs-wrap">
+    <div class="hs-ring">
+      <svg width="64" height="64" viewBox="0 0 64 64">
+        <circle class="hs-ring-bg" cx="32" cy="32" r="28"/>
+        <circle class="hs-ring-fg" cx="32" cy="32" r="28" stroke="${color}"
+          stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+      </svg>
+      <div class="hs-ring-text" style="color:${color}">${s}</div>
+    </div>
+    <div class="hs-info">
+      <div class="hs-label">Account Health Score</div>
+      <div class="hs-desc">${label} — gabungan dari 8 layer audit di atas</div>
+    </div>
+  </div>`;
+}
+
+/* ---------- feature menu ---------- */
+function renderFeatureMenu(username, analytics){
+  const el=$("#featureMenu");
+  if(!el) return;
+  el.innerHTML=`<div class="fm-bar">
+    <button class="fm-btn" onclick="togglePanel('analytics')">📊 Analytics</button>
+    <button class="fm-btn" onclick="togglePanel('ghost')">👻 Ghost Followers</button>
+    <button class="fm-btn" onclick="togglePanel('compare')">⚖️ Compare</button>
+  </div>`;
+
+  // Pre-render analytics (data already in response)
+  if(analytics&&analytics.tweet_count){
+    renderAnalytics(analytics);
+  }
+  // Pre-render compare inputs
+  const cp=$("#comparePanel");
+  if(cp) cp.innerHTML=`<div class="cp-wrap" id="cpWrap">
+    <div class="cp-inputs">
+      <input class="cp-input" id="cpUser1" placeholder="username 1" value="${escapeAttr(username)}"/>
+      <input class="cp-input" id="cpUser2" placeholder="username 2"/>
+      <button class="cp-btn" onclick="runCompare()">Bandingkan</button>
+    </div>
+    <div id="cpResult"></div>
+  </div>`;
+}
+
+function togglePanel(name){
+  const map={analytics:"analyticsPanel",ghost:"ghostPanel",compare:"comparePanel"};
+  const id=map[name]; if(!id) return;
+  const el=$("#"+id);
+  if(!el) return;
+  // Close others
+  Object.values(map).forEach(k=>{if(k!==id){const e=$("#"+k);if(e)e.querySelector(".show")?.classList?.remove("show");}});
+  // Toggle this one
+  const inner=el.querySelector(".an-wrap,.gh-wrap,.cp-wrap");
+  if(inner) inner.classList.toggle("show");
+  // Update menu active state
+  document.querySelectorAll(".fm-btn").forEach(b=>b.classList.remove("active"));
+  event?.target?.classList?.add("active");
+  // Lazy load ghost
+  if(name==="ghost"&&inner&&!inner.dataset.loaded){
+    loadGhostFollowers(LAST?.username||LAST?.profile?.username||"");
+  }
+}
+
+/* ---------- analytics ---------- */
+function renderAnalytics(a){
+  const el=$("#analyticsPanel");
+  if(!el||!a||!a.tweet_count) return;
+  const fmt=n=>{if(n>=1e6)return(n/1e6).toFixed(1)+"M";if(n>=1e3)return(n/1e3).toFixed(1)+"K";return n;};
+  // Content type colors
+  const typeColors={text:"#aaa",image:"#7ab17a",video:"#e89b9b",link:"#a8a0c8",retweet:"#e8c84b"};
+  const typeLabels={text:"Text",image:"Image",video:"Video",link:"Link",retweet:"RT"};
+  let typesHtml="";
+  Object.entries(a.content_types||{}).forEach(([k,v])=>{
+    if(v>0) typesHtml+=`<div class="an-type">
+      <span class="dot" style="background:${typeColors[k]||'#aaa'}"></span>
+      <div class="count">${v}</div>
+      <div class="name">${typeLabels[k]||k}</div>
+    </div>`;
+  });
+
+  // Best time
+  let bestHtml="";
+  (a.best_time||[]).forEach(b=>{
+    bestHtml+=`<div class="an-best-item">
+      <div class="hr">${String(b.hour).padStart(2,'0')}:00</div>
+      <div class="eng">${fmt(b.engagement)} eng</div>
+    </div>`;
+  });
+
+  // Schedule heatmap
+  let heatHtml='<div class="an-heat"><table><tr><td class="day-label"></td>';
+  for(let h=0;h<24;h++){if(h%3===0)heatHtml+=`<td class="hr-label">${h}</td>`;else heatHtml+='<td></td>';}
+  heatHtml+='</tr>';
+  const maxCount=Math.max(1,...(a.schedule||[]).flatMap(d=>d.hours));
+  (a.schedule||[]).forEach(d=>{
+    heatHtml+=`<tr><td class="day-label">${d.day}</td>`;
+    d.hours.forEach(c=>{
+      const intensity=c>0?Math.min(1,c/maxCount):0;
+      const bg=intensity>0?`rgba(170,160,200,${0.2+intensity*0.8})`:'var(--cloud)';
+      heatHtml+=`<td style="background:${bg}" title="${d.day} — ${c} tweets"></td>`;
+    });
+    heatHtml+='</tr>';
+  });
+  heatHtml+='</table></div>';
+
+  el.innerHTML=`<div class="an-wrap" id="anWrap">
+    <div class="an-cards">
+      <div class="an-card accent"><div class="val">${a.tweet_count}</div><div class="lbl">Tweets dianalisis</div></div>
+      <div class="an-card"><div class="val">${fmt(a.total_views)}</div><div class="lbl">Total Views</div></div>
+      <div class="an-card"><div class="val">${fmt(a.total_likes)}</div><div class="lbl">Total Likes</div></div>
+      <div class="an-card"><div class="val">${fmt(a.total_replies)}</div><div class="lbl">Total Replies</div></div>
+      <div class="an-card"><div class="val">${fmt(a.total_reposts)}</div><div class="lbl">Total Reposts</div></div>
+      <div class="an-card"><div class="val">${fmt(a.total_bookmarks)}</div><div class="lbl">Bookmarks</div></div>
+      <div class="an-card"><div class="val">${fmt(a.avg_views)}</div><div class="lbl">Avg Views</div></div>
+      <div class="an-card engagement"><div class="val">${a.engagement_rate}%</div><div class="lbl">Engagement Rate</div></div>
+    </div>
+    <div class="an-section-title">📦 Tipe Konten</div>
+    <div class="an-types">${typesHtml}</div>
+    <div class="an-section-title">⏰ Waktu Terbaik Posting (by engagement)</div>
+    <div class="an-best">${bestHtml||'<span style="color:var(--muted);font-size:12px">Data belum cukup</span>'}</div>
+    <div class="an-section-title">📅 Jadwal Aktivitas</div>
+    ${heatHtml}
+  </div>`;
+}
+
+/* ---------- ghost followers ---------- */
+async function loadGhostFollowers(username){
+  const el=$("#ghostPanel");
+  if(!el||!username) return;
+  el.innerHTML=`<div class="gh-wrap show" id="ghWrap"><div style="text-align:center;padding:20px;color:var(--muted)">Mengambil data ghost followers...</div></div>`;
+  try{
+    const r=await fetch(`/api/ghost-followers/${encodeURIComponent(username)}`);
+    const data=await r.json();
+    if(data.error){
+      el.innerHTML=`<div class="gh-wrap show"><div style="color:#e89b9b;padding:14px">Error: ${escapeHtml(data.error)}</div></div>`;
+      return;
+    }
+    const gh=data.ghosts||[];
+    let listHtml="";
+    gh.forEach(u=>{
+      const ava=u.avatar?`<img src="${u.avatar}" onerror="this.src='/assets/logo.png'" alt=""/>`:`<img src="/assets/logo.png" alt=""/>`;
+      listHtml+=`<div class="nf-user">
+        ${ava}
+        <div class="nf-user-info">
+          <div class="nf-user-name">${escapeHtml(u.name||u.screen_name)}</div>
+          <div class="nf-user-handle">@${escapeHtml(u.screen_name)}</div>
+        </div>
+        <div class="nf-user-stats">0 tweets</div>
+      </div>`;
+    });
+    el.innerHTML=`<div class="gh-wrap show" data-loaded="1" id="ghWrap">
+      <div class="gh-stats">
+        <div class="gh-stat ghost"><div class="val">${data.ghost_count}</div><div class="lbl">Ghost</div></div>
+        <div class="gh-stat"><div class="val">${data.active_count}</div><div class="lbl">Active</div></div>
+        <div class="gh-stat verified"><div class="val">${data.verified_count}</div><div class="lbl">Verified</div></div>
+        <div class="gh-stat"><div class="val">${data.total_checked}</div><div class="lbl">Dicek</div></div>
+      </div>
+      ${gh.length?listHtml:'<div style="color:var(--muted);font-size:13px;padding:10px">Tidak ada ghost follower di 100 follower pertama 🎉</div>'}
+      ${data.has_more?'<div style="font-size:11px;color:var(--muted);padding:8px">Menampilkan 100 follower pertama. Ada lebih banyak — fitur pagination menyusul.</div>':''}
+    </div>`;
+  }catch(e){
+    el.innerHTML=`<div class="gh-wrap show"><div style="color:#e89b9b;padding:14px">Error: ${escapeHtml(e.message||e)}</div></div>`;
+  }
+}
+
+/* ---------- compare mode ---------- */
+async function runCompare(){
+  const u1=($("#cpUser1")||{}).value?.trim();
+  const u2=($("#cpUser2")||{}).value?.trim();
+  const res=$("#cpResult");
+  if(!u1||!u2||!res) return;
+  res.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Membandingkan...</div>';
+  try{
+    const [r1,r2]=await Promise.all([
+      fetch("/api/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u1})}).then(r=>r.json()),
+      fetch("/api/check",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u2})}).then(r=>r.json()),
+    ]);
+    function col(d){
+      if(d.error) return `<div class="cp-col"><h4>@${escapeHtml(d.username||'?')}</h4><div style="color:#e89b9b">Error</div></div>`;
+      const a=d.analytics||{};
+      const hs=d.health_score||0;
+      const hsColor=hs>=70?'#7ab17a':hs>=40?'#e8c84b':'#e89b9b';
+      let rows=`<div class="cp-row"><span class="k">Health Score</span><span class="v" style="color:${hsColor}">${hs}/100</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Overall</span><span class="v">${d.overall||'?'}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Followers</span><span class="v">${fmt((d.profile||{}).followers||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Following</span><span class="v">${fmt((d.profile||{}).following||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Avg Views</span><span class="v">${fmt(a.avg_views||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Engagement Rate</span><span class="v">${a.engagement_rate||0}%</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Total Likes</span><span class="v">${fmt(a.total_likes||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Total Replies</span><span class="v">${fmt(a.total_replies||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Total Reposts</span><span class="v">${fmt(a.total_reposts||0)}</span></div>`;
+      rows+=`<div class="cp-row"><span class="k">Bookmarks</span><span class="v">${fmt(a.total_bookmarks||0)}</span></div>`;
+      (d.layers||[]).forEach(l=>{
+        const c=l.status==='safe'?'#7ab17a':l.status==='warning'?'#e8c84b':'#e89b9b';
+        rows+=`<div class="cp-row"><span class="k">${l.name}</span><span class="v" style="color:${c}">${l.status}</span></div>`;
+      });
+      return `<div class="cp-col"><h4>@${escapeHtml(d.username||u1)}</h4>${rows}</div>`;
+    }
+    res.innerHTML=`<div class="cp-grid">${col(r1)}${col(r2)}</div>`;
+  }catch(e){
+    res.innerHTML=`<div style="color:#e89b9b;padding:14px">Error: ${escapeHtml(e.message||e)}</div>`;
   }
 }
 

@@ -972,10 +972,25 @@ def _extract_tweets_from_timeline(data: dict) -> list:
             views = int((tr.get("views") or {}).get("count") or 0)
         except Exception:
             views = 0
+        # 2026-07-13 (KIRA): media type detection for analytics
+        entities = legacy.get("entities") or {}
+        media_list = entities.get("media") or []
+        urls_list = entities.get("urls") or []
+        if media_list:
+            mtype = media_list[0].get("type") or "photo"
+            media_type = "video" if mtype in ("video", "animated_gif") else "image"
+        elif urls_list:
+            media_type = "link"
+        elif legacy.get("full_text", "").startswith("RT @"):
+            media_type = "retweet"
+        else:
+            media_type = "text"
+
         out.append(
             {
                 "id": rest_id,
                 "text": legacy.get("full_text") or legacy.get("text") or "",
+                "mediaType": media_type,
                 "author": {
                     "screenName": u_legacy.get("screen_name") or "",
                     "name": u_legacy.get("name") or "",
@@ -1569,6 +1584,104 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     return _assemble_result(username, layers, profile, posts, bundle, sources, mstats)
 
 
+def _health_score(layers: list) -> int:
+    """Aggregate 8-layer status to 0-100 score. 8 layers tetap ada, ini bonus."""
+    if not layers:
+        return 0
+    total = 0
+    for l in layers:
+        s = l.get("status", "warning")
+        c = l.get("confidence", 50) / 100.0
+        if s == "safe":
+            total += int(100 * c)
+        elif s == "warning":
+            total += int(50 * c)
+        else:  # banned
+            total += int(5 * c)
+    return min(100, max(0, total // len(layers)))
+
+
+def _compute_analytics(posts: list, profile: dict) -> dict:
+    """Compute engagement metrics, content type, best time, schedule from posts."""
+    if not posts:
+        return {}
+
+    from datetime import datetime
+    import calendar
+
+    total_likes = total_replies = total_reposts = total_bookmarks = total_views = total_quotes = 0
+    content_types = {"text": 0, "image": 0, "video": 0, "link": 0, "retweet": 0}
+    hour_engagement = {}  # hour -> total engagement
+    day_hour_count = {}   # (day, hour) -> tweet count
+    day_names = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"]
+
+    for p in posts:
+        mm = p.get("metrics") or {}
+        total_likes += int(mm.get("likes") or 0)
+        total_replies += int(mm.get("replies") or 0)
+        total_reposts += int(mm.get("retweets") or 0)
+        total_bookmarks += int(mm.get("bookmarks") or 0)
+        total_views += int(mm.get("views") or 0)
+        total_quotes += int(mm.get("quotes") or 0)
+
+        mt = p.get("mediaType") or "text"
+        content_types[mt] = content_types.get(mt, 0) + 1
+
+        # Parse timestamp
+        ca = p.get("createdAt") or ""
+        if ca:
+            try:
+                dt = datetime.strptime(ca, "%a %b %d %H:%M:%S %z %Y")
+                h = dt.hour
+                dow = dt.weekday()  # 0=Monday
+                engagement = int(mm.get("likes") or 0) + int(mm.get("replies") or 0) + int(mm.get("retweets") or 0) + int(mm.get("bookmarks") or 0)
+                hour_engagement[h] = hour_engagement.get(h, 0) + engagement
+                day_hour_count[(dow, h)] = day_hour_count.get((dow, h), 0) + 1
+            except Exception:
+                pass
+
+    n = len(posts)
+    total_engagement = total_likes + total_replies + total_reposts + total_bookmarks
+    engagement_rate = round((total_engagement / total_views * 100), 2) if total_views > 0 else 0
+    avg_views = total_views // n if n > 0 else 0
+
+    # Best time to post: sort hours by avg engagement per tweet
+    best_time = []
+    for h, eng in sorted(hour_engagement.items(), key=lambda x: x[1], reverse=True):
+        best_time.append({"hour": h, "engagement": eng})
+    best_time = best_time[:5]  # top 5 hours
+
+    # Schedule heatmap: 7 days x 24 hours
+    schedule = []
+    for dow in range(7):
+        row = []
+        for h in range(24):
+            row.append(day_hour_count.get((dow, h), 0))
+        schedule.append({"day": day_names[dow], "hours": row})
+
+    # Verified follower estimate from profile
+    verified_pct = 0
+    if profile and profile.get("followers"):
+        # Rough estimate: blue verified typically 5-15% for mid accounts
+        verified_pct = min(15, max(1, (profile.get("verified", 0) or 0) * 100 // max(profile["followers"], 1)))
+
+    return {
+        "tweet_count": n,
+        "total_likes": total_likes,
+        "total_replies": total_replies,
+        "total_reposts": total_reposts,
+        "total_bookmarks": total_bookmarks,
+        "total_quotes": total_quotes,
+        "total_views": total_views,
+        "total_engagement": total_engagement,
+        "avg_views": avg_views,
+        "engagement_rate": engagement_rate,
+        "content_types": content_types,
+        "best_time": best_time,
+        "schedule": schedule,
+    }
+
+
 def _assemble_result(username: str, layers: list, profile, posts: list,
                      bundle: dict, sources: dict, mstats: dict) -> dict:
     """Assemble final result dict from 8 layers + raw data."""
@@ -1612,6 +1725,8 @@ def _assemble_result(username: str, layers: list, profile, posts: list,
     return {
         "username": username,
         "overall": overall,
+        "health_score": _health_score(layers),
+        "analytics": _compute_analytics(posts or [], profile),
         "metrics": metrics,
         "layers": layers,
         "tests": layers,  # backward compat alias for old frontend
@@ -2449,6 +2564,52 @@ def _nf_progress(entry: dict) -> dict:
         "batches_done": batches,
         "following_done": f_done,
         "followers_done": fo_done,
+    }
+
+
+# ============================================================
+# GHOST FOLLOWERS — inactive followers (0 tweets, no profile)
+# ============================================================
+
+@app.get("/api/ghost-followers/{username}")
+async def ghost_followers(username: str):
+    """Fetch one page of followers, return inactive ones (statuses_count=0)."""
+    uname = _safe_username(username)
+    if not uname:
+        return JSONResponse({"error": "invalid username"}, status_code=400)
+
+    result = await _fetch_rest_list("followers/list.json", uname, "", count=100)
+    if result["error"]:
+        return JSONResponse({"error": result["error"], "ghosts": [], "total": 0}, status_code=502)
+
+    ghosts = []
+    active = 0
+    verified = 0
+    for u in result["users"]:
+        sc = int(u.get("statuses_count") or 0)
+        is_verified = u.get("verified") or u.get("is_blue_verified") or False
+        if is_verified:
+            verified += 1
+        if sc == 0:
+            ghosts.append({
+                "screen_name": u.get("screen_name") or "",
+                "name": u.get("name") or "",
+                "avatar": (u.get("profile_image_url_https") or "").replace("_normal", "_bigger"),
+                "followers": u.get("followers_count") or 0,
+                "verified": is_verified,
+                "created_at": u.get("created_at") or "",
+            })
+        else:
+            active += 1
+
+    return {
+        "username": uname,
+        "ghosts": ghosts,
+        "ghost_count": len(ghosts),
+        "active_count": active,
+        "verified_count": verified,
+        "total_checked": len(result["users"]),
+        "has_more": bool(result["next_cursor"] and result["next_cursor"] != "0"),
     }
 
 

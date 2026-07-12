@@ -253,6 +253,73 @@ nav{display:flex;align-items:center;justify-content:space-between;gap:12px;
 .nf-more-btn:disabled{opacity:.5;cursor:not-allowed;}
 .nf-done{text-align:center;padding:10px;font-size:13px;color:var(--muted);font-weight:600;}
 
+/* health score */
+.hs-wrap{margin-top:16px;display:flex;align-items:center;gap:16px;padding:14px 20px;background:var(--surface);border:1.5px solid var(--border);border-radius:18px;box-shadow:var(--shadow);}
+.hs-ring{position:relative;width:64px;height:64px;flex-shrink:0;}
+.hs-ring svg{transform:rotate(-90deg);}
+.hs-ring-bg{fill:none;stroke:var(--cloud);stroke-width:6;}
+.hs-ring-fg{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset 1s var(--ease);}
+.hs-ring-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Baloo 2';font-weight:800;font-size:20px;color:var(--head);}
+.hs-info{flex:1;}
+.hs-label{font-family:'Baloo 2';font-weight:800;font-size:15px;color:var(--head);}
+.hs-desc{font-size:12px;color:var(--muted);margin-top:2px;}
+
+/* feature menu */
+.fm-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;margin-bottom:4px;}
+.fm-btn{border:1.5px solid var(--border);background:var(--surface);color:var(--head);font-family:'Baloo 2';font-weight:700;font-size:13px;padding:9px 16px;border-radius:999px;cursor:pointer;transition:all .25s var(--ease);display:inline-flex;align-items:center;gap:6px;}
+.fm-btn:hover{border-color:var(--lav);background:rgba(170,160,200,.08);transform:translateY(-1px);}
+.fm-btn.active{background:var(--lav);color:#fff;border-color:var(--lav);}
+
+/* analytics */
+.an-wrap{margin-top:14px;display:none;}
+.an-wrap.show{display:block;}
+.an-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px;}
+.an-card{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center;box-shadow:var(--shadow);}
+.an-card .val{font-family:'Baloo 2';font-weight:800;font-size:22px;color:var(--head);}
+.an-card .lbl{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:.5px;}
+.an-card.accent .val{color:var(--lav);}
+.an-card.engagement .val{color:var(--sage);}
+.an-section-title{font-family:'Baloo 2';font-weight:800;font-size:15px;color:var(--head);margin:16px 0 8px;}
+.an-types{display:flex;gap:8px;flex-wrap:wrap;}
+.an-type{flex:1;min-width:80px;background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px;text-align:center;}
+.an-type .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px;}
+.an-type .count{font-family:'Baloo 2';font-weight:800;font-size:18px;color:var(--head);}
+.an-type .name{font-size:11px;color:var(--muted);}
+.an-best{display:flex;gap:8px;flex-wrap:wrap;}
+.an-best-item{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:8px 14px;text-align:center;}
+.an-best-item .hr{font-family:'Baloo 2';font-weight:800;font-size:16px;color:var(--head);}
+.an-best-item .eng{font-size:10px;color:var(--muted);font-weight:600;}
+.an-heat{overflow-x:auto;}
+.an-heat table{border-collapse:collapse;font-size:9px;}
+.an-heat td{width:18px;height:18px;text-align:center;border:1px solid var(--cloud);}
+.an-heat .day-label{font-weight:700;color:var(--head);font-size:10px;text-align:right;padding-right:6px;width:auto;}
+.an-heat .hr-label{font-weight:600;color:var(--muted);font-size:8px;}
+
+/* ghost */
+.gh-wrap{margin-top:14px;display:none;}
+.gh-wrap.show{display:block;}
+.gh-stats{display:flex;gap:12px;margin-bottom:12px;}
+.gh-stat{background:var(--surface);border:1.5px solid var(--border);border-radius:12px;padding:10px 16px;text-align:center;}
+.gh-stat .val{font-family:'Baloo 2';font-weight:800;font-size:20px;color:var(--head);}
+.gh-stat .lbl{font-size:10px;color:var(--muted);font-weight:600;}
+.gh-stat.ghost .val{color:#e89b9b;}
+.gh-stat.verified .val{color:var(--lav);}
+
+/* compare */
+.cp-wrap{margin-top:14px;display:none;}
+.cp-wrap.show{display:block;}
+.cp-inputs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.cp-input{flex:1;min-width:120px;border:1.5px solid var(--border);border-radius:12px;padding:10px 14px;font-family:inherit;font-size:13px;background:var(--surface);color:var(--head);}
+.cp-btn{border:none;background:var(--lav);color:#fff;font-family:'Baloo 2';font-weight:700;font-size:13px;padding:10px 20px;border-radius:12px;cursor:pointer;}
+.cp-btn:disabled{opacity:.5;cursor:not-allowed;}
+.cp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.cp-col{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:14px;}
+.cp-col h4{font-family:'Baloo 2';font-weight:800;font-size:15px;color:var(--head);margin:0 0 8px;}
+.cp-row{display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--cloud);}
+.cp-row .k{color:var(--muted);}
+.cp-row .v{font-weight:700;color:var(--head);}
+@media(max-width:640px){.cp-grid{grid-template-columns:1fr;}}
+
 /* deep analysis */
 .deep-cta{margin-top:22px;text-align:center;}
 .deep-btn{border:none;background:linear-gradient(135deg,var(--lav),var(--cocoa));color:#fff;
@@ -478,7 +545,12 @@ footer .em{font-size:20px;display:block;margin-bottom:6px;}
     <div class="profile-card" id="profileCard"></div>
     <div class="overall" id="overall"></div>
     <div class="layer-summary" id="layerSummary"></div>
+    <div id="healthScoreSection"></div>
+    <div id="featureMenu"></div>
     <div class="grid" id="grid"></div>
+    <div id="analyticsPanel"></div>
+    <div id="ghostPanel"></div>
+    <div id="comparePanel"></div>
     <div id="recoverySection"></div>
     <div id="timelineSection"></div>
     <div id="nonFollowersSection"></div>
@@ -549,6 +621,6 @@ footer .em{font-size:20px;display:block;margin-bottom:6px;}
   </div>
 </section>
 
-<script src="/assets/app.js?v=20260713b"></script>
+<script src="/assets/app.js?v=20260713c"></script>
 </body>
 </html>
