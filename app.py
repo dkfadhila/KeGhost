@@ -1075,16 +1075,22 @@ async def fetch_via_cookies(username: str) -> dict | None:
         )
         from_own = [t for t in _extract_tweets_from_timeline(s1) if _author_screen(t) == username]
     except Exception:
-        # if search unavailable, treat posts visibility as proxy later
-        from_own = posts[: min(5, len(posts))] if posts else []
+        # 2026-07-12 (KIRA): removed `from_own = posts[:5]` fallback.
+        # Setting from_own to timeline posts made has_from=True, which
+        # triggered false "safe" on SEARCH, POST, and INDEX layers even
+        # when SearchTimeline was broken. Leave empty — audit falls through
+        # to the appropriate warning/banned state for untested search.
+        from_own = []
 
     try:
         s2 = await x_graphql(
             "SearchTimeline",
             {"rawQuery": f"@{username}", "count": 10, "querySource": "typed_query", "product": "Latest"},
         )
-        people_own = [t for t in _extract_tweets_from_timeline(s2) if _author_screen(t) == username]
+        people_hits_raw = _extract_tweets_from_timeline(s2)
+        people_own = [t for t in people_hits_raw if _author_screen(t) == username]
     except Exception:
+        people_hits_raw = []
         people_own = []
 
     # Bare username search (for INDEX layer)
@@ -1093,8 +1099,10 @@ async def fetch_via_cookies(username: str) -> dict | None:
             "SearchTimeline",
             {"rawQuery": username, "count": 10, "querySource": "typed_query", "product": "Latest"},
         )
-        bare_own = [t for t in _extract_tweets_from_timeline(s_bare) if _author_screen(t) == username]
+        bare_hits_raw = _extract_tweets_from_timeline(s_bare)
+        bare_own = [t for t in bare_hits_raw if _author_screen(t) == username]
     except Exception:
+        bare_hits_raw = []
         bare_own = []
 
     hashtag = None
@@ -1116,10 +1124,16 @@ async def fetch_via_cookies(username: str) -> dict | None:
         except Exception:
             hashtag_own = []
 
-    # Mentioned by others (for SUGGEST layer)
+    # 2026-07-12 (KIRA): Mentioned by others — use RAW search hits
+    # (people_hits_raw + bare_hits_raw), NOT the _own filtered lists.
+    # Old code used (people_own + bare_own) which were already filtered to
+    # target's own tweets, so `mentioned` only contained self-mentions.
+    # SUGGEST layer always got 0 mention_hits → always "warning" on cookie
+    # path (Vercel). Now correctly counts tweets by OTHERS mentioning user.
     mentioned = [
-        t for t in (people_own + bare_own)
+        t for t in (people_hits_raw + bare_hits_raw)
         if username in ((t.get("text") or "").lower())
+        and _author_screen(t) != username
     ]
 
     local_avatar = await cache_avatar(username, profile.get("avatar") or "")
@@ -1136,6 +1150,8 @@ async def fetch_via_cookies(username: str) -> dict | None:
         "from_own": from_own,
         "people_own": people_own,
         "bare_own": bare_own,
+        # 2026-07-12 (KIRA): raw count for INDEX layer
+        "bare_hits_count": len(bare_hits_raw),
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
@@ -1188,13 +1204,23 @@ def _spam_analysis(posts: list) -> dict:
     seen = set()
     dupes = 0
     for t in texts:
-        key = re.sub(r"\s+", " ", t.lower().strip())[:120]
+        # 2026-07-12 (KIRA): prefix 120 → 200 chars for dupe key. 120 was
+        # too short — tweets sharing a common opening phrase (RT prefix,
+        # "Breaking:", thread starters) but diverging later were flagged.
+        key = re.sub(r"\s+", " ", t.lower().strip())[:200]
         if not key:
             continue
         if key in seen:
             dupes += 1
         seen.add(key)
-    link_posts = sum(1 for t in texts if "http://" in t or "https://" in t or "t.co" in t)
+    # 2026-07-12 (KIRA): link spam = 2+ distinct links per tweet, not just
+    # any link. News/media accounts post 1 link per tweet (normal). Spam
+    # accounts post multiple links to dodge filters. Single-link tweets
+    # no longer count toward link_posts.
+    link_posts = sum(
+        1 for t in texts
+        if len(re.findall(r"https?://\S+|t\.co/\S+", t)) >= 2
+    )
     mention_posts = sum(1 for t in texts if t.startswith("@") or t.count("@") >= 3)
     dupe_ratio = dupes / max(n, 1)
     link_ratio = link_posts / max(n, 1)
@@ -1240,7 +1266,13 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     from_own = bundle.get("from_own") or []
     people_own = bundle.get("people_own") or []
     bare_own = bundle.get("bare_own") or []
-    hashtag = bundle.get("hashtag")
+    # 2026-07-12 (KIRA): bare_hits_count = total results from bare username
+    # search (before authored_by_target filter). INDEX layer needs to know
+    # if ANY results came back (username is indexed), not just target's own
+    # tweets in those results (which is 0 for most accounts — they don't
+    # mention their own username in tweets).
+    bare_hits_count = bundle.get("bare_hits_count") or len(bare_own)
+    hashtag = bundle.get("hashtag") or None
     hashtag_own = bundle.get("hashtag_own") or []
 
     mentioned = bundle.get("mentioned")
@@ -1252,7 +1284,14 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     avg_likes = mstats.get("avg_likes") or 0
     avg_quotes = mstats.get("avg_quotes") or 0
     followers = max(profile.get("followers") or 0, 1)
-    expected_floor = max(20, followers * 0.002)
+    # 2026-07-12 (KIRA): tiered expected_floor — mega-accounts naturally have
+    # lower view:follower ratio (inactive followers, algorithmic distribution
+    # limits, time zones). Flat 1% flagged Elon Musk (1.4M views/241M followers)
+    # as "warning" which is absurd. Log-scaled: 30 floor for micro accounts,
+    # scales sub-linearly so 100M followers → ~3K expected, not 1M.
+    import math
+    _log_f = math.log10(max(followers, 10))
+    expected_floor = max(30, int(_log_f ** 3 * 5))
     is_protected = bool(profile.get("protected"))
     has_posts = len(posts) > 0
     has_from = len(from_own) > 0
@@ -1278,7 +1317,11 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
         L2 = _layer("SEARCH", "warning", 50, "Sampel tipis — tidak bisa konfirmasi")
 
     # --- Layer 3: SUGGEST — @username mention visibility / typeahead ---
-    mention_hits = len(people_own) + len([m for m in mentioned if _author_screen(m) != username])
+    # 2026-07-12 (KIRA): removed len(people_own) from mention_hits.
+    # people_own = target's OWN tweets in @username search (self-mentions).
+    # Adding it inflated SUGGEST for accounts that self-reply a lot.
+    # Only count tweets by OTHERS that mention the user.
+    mention_hits = len([m for m in mentioned if _author_screen(m) != username])
     if mention_hits >= 1:
         L3 = _layer("SUGGEST", "safe", _clamp(78 + mention_hits * 3, 78, 95),
                      f"@{username} muncul di mention search ({mention_hits} hit)")
@@ -1297,9 +1340,15 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     elif avg_quotes > 0:
         L4 = _layer("QRT", "safe", _clamp(75 + min(avg_quotes * 5, 20), 75, 95),
                      f"Quote metrics normal (avg {avg_quotes:.1f} quote/post)")
+    # 2026-07-12 (KIRA): demoted "banned" → "warning". 0 quotes with 500+
+    # views is normal for most accounts — quoting is a rare interaction
+    # (only ~1-3% of tweets get quoted). Old logic called this "banned"
+    # with 72 confidence, producing false positives on medium accounts.
+    # Also removed `not has_from` gate — quote visibility is independent
+    # of search visibility.
     elif avg_views > 500 and not has_from:
-        L4 = _layer("QRT", "banned", 72, "Views ada tapi quote stuck 0 + search lemah — quote ban")
-    elif avg_views > 2000:
+        L4 = _layer("QRT", "warning", 52, "Quote kosong + search lemah — mungkin partial quote limit")
+    elif avg_views > 5000:
         L4 = _layer("QRT", "warning", 55, "Quote kosong meski views lumayan — mungkin partial limit")
     else:
         L4 = _layer("QRT", "safe", 70, "Quote visibility terlihat normal (views rendah, wajar quote kecil)")
@@ -1308,10 +1357,13 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     spam = _spam_analysis(posts)
     if not has_posts:
         L5 = _layer("SPAM", "warning", 35, "Tidak ada post untuk analisis spam")
-    elif spam["dupe_ratio"] >= 0.5 or (spam["link_ratio"] >= 0.8 and spam["mention_ratio"] >= 0.5):
+    elif spam["dupe_ratio"] >= 0.5 or (spam["link_ratio"] >= 0.5 and spam["mention_ratio"] >= 0.5):
         L5 = _layer("SPAM", "banned", _clamp(70 + int(spam["dupe_ratio"] * 20), 70, 90),
                      f"Pola spam terdeteksi: {spam['desc']}")
-    elif spam["dupe_ratio"] >= 0.3 or spam["link_ratio"] >= 0.6 or spam["mention_ratio"] >= 0.4:
+    # 2026-07-12 (KIRA): link_ratio threshold 0.6 → 0.4. Now that link_posts
+    # only counts 2+-link tweets, a 40% rate of multi-link tweets is a
+    # genuine spam signal. Old 0.6 with single-link counting flagged CNN.
+    elif spam["dupe_ratio"] >= 0.3 or spam["link_ratio"] >= 0.4 or spam["mention_ratio"] >= 0.4:
         L5 = _layer("SPAM", "warning", _clamp(55 + int(spam["dupe_ratio"] * 15), 55, 70),
                      f"Sinyal spam moderat: {spam['desc']}")
     else:
@@ -1322,15 +1374,23 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
     view_follower_ratio = avg_views / followers
     if not has_posts:
         L6 = _layer("RANK", "warning", 40, "Tidak ada post untuk ukur engagement")
-    elif avg_views < expected_floor and not has_from:
-        L6 = _layer("RANK", "banned",
-                     _clamp(70 + int((expected_floor - avg_views) / max(expected_floor, 1) * 15), 70, 88),
-                     f"Views sangat rendah ({int(avg_views)}) vs followers {followers} — rank ditekan")
+    # 2026-07-12 (KIRA): removed `and not has_from` gate — views below floor
+    # is a rank signal regardless of search visibility. has_from was True for
+    # ~all active accounts, so this "banned" path NEVER fired.
     elif avg_views < expected_floor:
-        L6 = _layer("RANK", "warning",
-                     _clamp(55 + int(avg_views / max(expected_floor, 1) * 10), 50, 68),
-                     f"Views rendah ({int(avg_views)}) — mungkin partial limit")
-    elif like_ratio < 0.005 and avg_views > 1000:
+        severity = (expected_floor - avg_views) / max(expected_floor, 1)
+        if severity > 0.7:
+            L6 = _layer("RANK", "banned",
+                         _clamp(70 + int(severity * 18), 70, 88),
+                         f"Views sangat rendah ({int(avg_views)}) vs expected {int(expected_floor)} (followers {followers}) — rank ditekan")
+        else:
+            L6 = _layer("RANK", "warning",
+                         _clamp(55 + int(avg_views / max(expected_floor, 1) * 10), 50, 68),
+                         f"Views rendah ({int(avg_views)}) vs expected {int(expected_floor)} — mungkin partial limit")
+    # 2026-07-12 (KIRA): removed `avg_views > 1000` gate — low like_ratio is
+    # a suppression signal at ANY view count. An account with 200 avg views
+    # and 0.1% like ratio has terrible engagement but old logic said "safe".
+    elif like_ratio < 0.005:
         L6 = _layer("RANK", "warning", 58,
                      f"Like ratio sangat rendah ({like_ratio:.4f}) — engagement lemah")
     else:
@@ -1350,13 +1410,18 @@ def audit_8_layers(username: str, bundle: dict, sources: dict) -> dict:
                      f"Post ada ({len(posts)}) tapi tidak muncul di search — ghost/index ban")
 
     # --- Layer 8: INDEX — search index presence ---
-    if len(bare_own) >= 1:
-        L8 = _layer("INDEX", "safe", _clamp(78 + len(bare_own) * 3, 78, 95),
-                     f"Username muncul di search index ({len(bare_own)} hit)")
-    elif has_from:
-        L8 = _layer("INDEX", "safe", 74, "Akun terindeks (terlihat lewat from: search)")
+    # 2026-07-12 (KIRA): INDEX tests if the username appears in X's search
+    # index. bare_hits_count = total results from bare username search (by
+    # anyone, not just target). If ANY results come back, the username IS
+    # indexed. Old code checked bare_own (target's own tweets in bare search)
+    # which is 0 for most accounts (they don't mention their own username).
+    if bare_hits_count >= 1:
+        L8 = _layer("INDEX", "safe", _clamp(78 + min(bare_hits_count * 3, 17), 78, 95),
+                     f"Username muncul di search index ({bare_hits_count} hit)")
     elif is_protected:
         L8 = _layer("INDEX", "warning", 50, "Protected — index terbatas")
+    elif has_from:
+        L8 = _layer("INDEX", "warning", 60, "from: search OK tapi username search kosong — mungkin partial deindex")
     elif has_posts:
         L8 = _layer("INDEX", "banned", _clamp(70 + min(len(posts) * 2, 15), 70, 85),
                      "Profil ada tapi tidak muncul di search index — deindex")
@@ -1418,7 +1483,14 @@ def _assemble_result(username: str, layers: list, profile, posts: list,
         "probes": {
             "posts_count": len(posts or []),
             "from_search_hits": len(bundle.get("from_own") or []),
-            "mention_search_hits": len(bundle.get("people_own") or []) + len(bundle.get("bare_own") or []),
+            # 2026-07-12 (KIRA): count mentions BY OTHERS, not target's own
+            # tweets. Old formula counted people_own+bare_own (target's own
+            # tweets in @username/bare search) which was always ~0 for
+            # normal accounts, contradicting the SUGGEST layer's hit count.
+            "mention_search_hits": len([
+                m for m in (bundle.get("mentioned") or [])
+                if _author_screen(m) != username
+            ]),
             "hashtag": bundle.get("hashtag"),
             "hashtag_hits": len(bundle.get("hashtag_own") or []),
             "avg_views": int(avg_views),
@@ -1549,6 +1621,9 @@ async def check_with_agentx(username: str) -> dict:
         "from_own": from_own,
         "people_own": people_own,
         "bare_own": bare_own,
+        # 2026-07-12 (KIRA): raw count for INDEX layer — total bare username
+        # search results (by anyone), not just target's own tweets.
+        "bare_hits_count": len(bare_hits),
         "mentioned": mentioned,
         "hashtag": hashtag,
         "hashtag_own": hashtag_own,
