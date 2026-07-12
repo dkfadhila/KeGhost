@@ -163,6 +163,8 @@ function renderResult(data){
 
   window.__layers=data.layers||data.tests||[];
   renderGrid();
+  renderRecovery(data.recovery||[]);
+  loadTimeline(data.username||(data.profile&&data.profile.username)||"");
   // reset deep panel
   $("#deepPanel").classList.remove("show");
   $("#deepPanel").innerHTML="";
@@ -196,6 +198,63 @@ function renderGrid(){
     g.appendChild(d);
     requestAnimationFrame(()=>{setTimeout(()=>{const bar=d.querySelector(".conf i");if(bar)bar.style.width=(l.confidence||0)+"%";},i*60+120);});
   });
+}
+
+/* ---------- recovery checklist ---------- */
+function renderRecovery(recovery){
+  const el=$("#recoverySection");
+  if(!el) return;
+  if(!recovery||!recovery.length){
+    el.innerHTML=`<div class="recovery-empty">✅ Semua layer aman — tidak ada action yang perlu diambil. Tetap jaga kualitas konten ya 🌿</div>`;
+    return;
+  }
+  let html=`<div class="recovery-wrap"><div class="recovery-title">🩹 Recovery Checklist</div>`;
+  recovery.forEach(r=>{
+    const steps=r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join("");
+    html+=`<div class="recovery-card ${r.priority}">
+      <div class="recovery-head">
+        <span class="recovery-badge ${r.priority}">${r.priority}</span>
+        <h4>${escapeHtml(r.title)}</h4>
+      </div>
+      <ul class="recovery-steps">${steps}</ul>
+    </div>`;
+  });
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+/* ---------- scan history timeline ---------- */
+async function loadTimeline(username){
+  const el=$("#timelineSection");
+  if(!el||!username) return;
+  try{
+    const r=await fetch(`/api/scan-history/${encodeURIComponent(username)}`);
+    const data=await r.json();
+    if(!data.scans||!data.scans.length){
+      el.innerHTML=`<div class="timeline-wrap"><div class="timeline-title">📊 Riwayat Scan</div><div class="timeline-empty">Belum ada riwayat scan sebelumnya. Scan ulang nanti untuk lihat trend perubahan.</div></div>`;
+      return;
+    }
+    const trendIcon=data.trend==="improving"?"📈":data.trend==="degrading"?"📉":"➡️";
+    const trendLabel=data.trend==="improving"?"Membaik":data.trend==="degrading"?"Memburuk":"Stabil";
+    let dots="";
+    data.scans.forEach((s,i)=>{
+      const d=s.timestamp?new Date(s.timestamp):new Date();
+      const dateStr=d.toLocaleDateString("id-ID",{day:"numeric",month:"short"});
+      dots+=`<div class="timeline-dot ${s.overall}" title="${dateStr}: ${s.overall}">
+        <span>${i+1}</span>
+        <div class="timeline-dot-tooltip">${dateStr} · ${s.overall}</div>
+      </div>`;
+    });
+    el.innerHTML=`<div class="timeline-wrap">
+      <div class="timeline-title">📊 Riwayat Scan
+        <span class="timeline-trend ${data.trend}">${trendIcon} ${trendLabel}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600;margin-left:auto">${data.count} scan</span>
+      </div>
+      <div class="timeline-bar">${dots}</div>
+    </div>`;
+  }catch(e){
+    el.innerHTML="";
+  }
 }
 
 /* ---------- deep analysis ---------- */

@@ -195,6 +195,26 @@ async def sb_scan_detail(scan_id: int) -> dict | None:
     return None
 
 
+async def sb_user_history(username: str, limit: int = 20) -> list:
+    """All scans for one username, oldest first — for timeline view."""
+    if not SUPABASE_ON:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(
+                f"{SUPABASE_URL}/rest/v1/scans"
+                f"?select=id,username,overall,search_vis,reply_rate,quote_rate,engagement,layers,avatar_url,created_at"
+                f"&username=eq.{_safe_username(username)}"
+                f"&order=created_at.asc&limit={int(limit)}",
+                headers=_sb_headers(),
+            )
+        if 200 <= r.status_code < 300:
+            return r.json() or []
+    except Exception:
+        pass
+    return []
+
+
 def wib_today() -> str:
     """Current date string in WIB (UTC+7). Quota resets at 00:00 WIB."""
     return datetime.utcfromtimestamp(time.time() + WIB_OFFSET_SEC).strftime("%Y-%m-%d")
@@ -1823,6 +1843,9 @@ async def api_check(request: CheckRequest):
     except Exception:
         pass
 
+    # 2026-07-13 (KIRA): embed recovery checklist in scan result
+    result["recovery"] = _build_recovery(result.get("layers") or [])
+
     return JSONResponse(result)
 
 
@@ -1939,6 +1962,205 @@ async def history_detail(scan_id: int):
         "profile": row.get("profile") or {},
         "timestamp": row.get("created_at") or "",
         "from_history": True,
+    }
+
+
+# ============================================================
+# RECOVERY CHECKLIST — actionable steps based on layer status
+# ============================================================
+
+_RECOVERY_RULES = {
+    "SEARCH_banned": {
+        "priority": "critical",
+        "title": "Search ban terdeteksi",
+        "steps": [
+            "Hentikan semua mass reply/mass mention selama 3-7 hari",
+            "Post konten original (bukan RT/quote) minimal 1x/hari",
+            "Jangan gunakan hashtag berulang di setiap tweet",
+            "Tunggu reindex 3-7 hari, cek lagi dengan KeGhost",
+        ],
+    },
+    "SEARCH_warning": {
+        "priority": "medium",
+        "title": "Search visibility lemah",
+        "steps": [
+            "Kurangi frekuensi reply ke akun besar (terlihat seperti bot)",
+            "Post konten original dengan engagement natural",
+            "Hindari tweet dengan link-only tanpa konteks",
+        ],
+    },
+    "SUGGEST_banned": {
+        "priority": "critical",
+        "title": "Suggestion ban terdeteksi",
+        "steps": [
+            "Username tidak muncul di typeahead — sinyal kuat shadowban",
+            "Hapus tweet yang berulang/duplikat (spam pattern)",
+            "Jangan mass mention 5+ orang dalam 1 tweet",
+            "Hentikan aktivitas bot-like 7-14 hari untuk reset algoritma",
+        ],
+    },
+    "SUGGEST_warning": {
+        "priority": "medium",
+        "title": "Suggestion visibility lemah",
+        "steps": [
+            "Bangun engagement natural: reply bermakna, bukan sekedar emoji",
+            "Hindari follow/unfollow massal",
+            "Post di jam aktif followers (cek analytics X)",
+        ],
+    },
+    "QRT_warning": {
+        "priority": "low",
+        "title": "Quote visibility terbatas",
+        "steps": [
+            "Kurangi quote tweet, buat original content lebih banyak",
+            "Jika quote, tambahkan opini/konteks bukan sekedar repost",
+        ],
+    },
+    "SPAM_banned": {
+        "priority": "critical",
+        "title": "Pola spam terdeteksi",
+        "steps": [
+            "Hapus tweet duplikat/berulang secara manual",
+            "Kurangi tweet dengan multiple link (2+ link per tweet)",
+            "Beri jeda 30+ menit antar tweet, jangan burst post",
+            "Hindari mention 3+ orang dalam 1 tweet",
+        ],
+    },
+    "SPAM_warning": {
+        "priority": "medium",
+        "title": "Sinyal spam moderat",
+        "steps": [
+            "Variasi konten — jangan ulang template tweet",
+            "Kurangi tweet link-only, tambah konteks/preview",
+        ],
+    },
+    "RANK_banned": {
+        "priority": "high",
+        "title": "Engagement ditekan algoritma",
+        "steps": [
+            "Views sangat rendah vs followers — algoritma sedang limit reach",
+            "Post konten viral-potential: thread, image, video",
+            "Engage dengan akun lebih besar dari kamu (reply bermakna)",
+            "Hindari tweet kontroversial yang trigger rate limit",
+        ],
+    },
+    "RANK_warning": {
+        "priority": "low",
+        "title": "Engagement lemah",
+        "steps": [
+            "Like ratio rendah — konten kurang engaging",
+            "Coba post di jam prime time (19:00-22:00 WIB)",
+            "Gunakan image/video untuk boost engagement",
+        ],
+    },
+    "POST_banned": {
+        "priority": "critical",
+        "title": "Post tidak terindeks (ghost ban)",
+        "steps": [
+            "Post ada tapi tidak muncul di search — ghost ban aktif",
+            "Hentikan semua aktivitas automated 7-14 hari",
+            "Hapus tweet yang mungkin trigger spam filter",
+            "Post original content dan tunggu reindex",
+        ],
+    },
+    "POST_warning": {
+        "priority": "low",
+        "title": "Post visibility terbatas",
+        "steps": [
+            "Beberapa post mungkin tidak terindeks penuh",
+            "Pastikan tweet tidak protected/private",
+            "Post dengan keyword yang searchable",
+        ],
+    },
+    "INDEX_banned": {
+        "priority": "critical",
+        "title": "Deindex dari search (index ban)",
+        "steps": [
+            "Username tidak muncul di search index — deindex total",
+            "Hentikan mass activity 14 hari untuk reset",
+            "Post original content 1-2x/hari secara natural",
+            "Appeal ke X Support jika tidak recover setelah 14 hari",
+        ],
+    },
+    "INDEX_warning": {
+        "priority": "low",
+        "title": "Index presence tidak konfirmable",
+        "steps": [
+            "Tunggu 24-48 jam lalu scan ulang",
+            "Post tweet dengan hashtag trending untuk test index",
+        ],
+    },
+}
+
+
+def _build_recovery(layers: list) -> list:
+    """Generate recovery checklist from layer statuses."""
+    out = []
+    seen_keys = set()
+    for l in layers:
+        name = l.get("name") or ""
+        status = l.get("status") or ""
+        if status == "safe":
+            continue
+        key = f"{name}_{status}"
+        rule = _RECOVERY_RULES.get(key)
+        if not rule or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        out.append({
+            "layer": name,
+            "status": status,
+            "priority": rule["priority"],
+            "title": rule["title"],
+            "steps": rule["steps"],
+        })
+    # Sort by priority: critical > high > medium > low
+    _prio = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    out.sort(key=lambda x: _prio.get(x["priority"], 9))
+    return out
+
+
+@app.get("/api/scan-history/{username}")
+async def scan_history(username: str):
+    """Timeline of all past scans for a username — for historical tracking."""
+    uname = _safe_username(username)
+    if not uname:
+        return JSONResponse({"error": "invalid username"}, status_code=400)
+    rows = await sb_user_history(uname, limit=20)
+    if not rows:
+        return {"username": uname, "scans": [], "trend": "unknown", "count": 0}
+    # Build timeline entries
+    scans = []
+    for row in rows:
+        scans.append({
+            "id": row.get("id"),
+            "overall": row.get("overall") or "warning",
+            "metrics": {
+                "search": row.get("search_vis") or 0,
+                "reply": row.get("reply_rate") or 0,
+                "quote": row.get("quote_rate") or 0,
+                "engagement": row.get("engagement") or 0,
+            },
+            "layers": row.get("layers") or [],
+            "timestamp": row.get("created_at") or "",
+        })
+    # Trend detection: compare last vs first scan
+    _score = {"safe": 2, "warning": 1, "banned": 0}
+    first = _score.get(scans[0]["overall"], 1)
+    last = _score.get(scans[-1]["overall"], 1)
+    if last > first:
+        trend = "improving"
+    elif last < first:
+        trend = "degrading"
+    else:
+        trend = "stable"
+    return {
+        "username": uname,
+        "scans": scans,
+        "trend": trend,
+        "count": len(scans),
+        "first_scan": scans[0]["timestamp"] if scans else "",
+        "last_scan": scans[-1]["timestamp"] if scans else "",
     }
 
 
