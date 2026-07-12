@@ -939,6 +939,27 @@ def _parse_user_result(result: dict) -> dict | None:
     }
 
 
+def _extract_bottom_cursor(data: dict) -> str:
+    """Extract bottom cursor from GraphQL timeline response for pagination."""
+    instructions = (
+        _walk(data, "data", "user", "result", "timeline", "timeline", "instructions")
+        or _walk(data, "data", "user", "result", "timeline_v2", "timeline", "instructions")
+        or _walk(data, "data", "search_by_raw_query", "search_timeline", "timeline", "instructions")
+        or []
+    )
+    if not isinstance(instructions, list):
+        return ""
+    for inst in instructions:
+        if not isinstance(inst, dict):
+            continue
+        if inst.get("type") == "TimelineAddEntries":
+            for ent in (inst.get("entries") or []):
+                content = (ent or {}).get("content") or {}
+                if content.get("entryType") == "TimelineTimelineCursor" and content.get("cursorType") == "Bottom":
+                    return content.get("value") or ""
+    return ""
+
+
 def _extract_tweets_from_timeline(data: dict) -> list:
     """Pull tweet objects from GraphQL timeline instructions."""
     out = []
@@ -1039,6 +1060,36 @@ def _extract_tweets_from_timeline(data: dict) -> list:
     return uniq
 
 
+async def _fetch_tweets_paginated(uid: str, max_tweets: int = 100) -> list:
+    """Fetch up to max_tweets via UserTweets GraphQL with cursor pagination."""
+    posts = []
+    cursor = ""
+    for _page in range(6):
+        variables = {
+            "userId": uid,
+            "count": 40,
+            "includePromotedContent": False,
+            "withQuickPromoteEligibilityTweetFields": True,
+            "withVoice": True,
+            "withV2Timeline": True,
+        }
+        if cursor:
+            variables["cursor"] = cursor
+        try:
+            tw_json = await x_graphql("UserTweets", variables)
+        except Exception:
+            break
+        page_posts = _extract_tweets_from_timeline(tw_json)
+        posts.extend(page_posts)
+        if len(posts) >= max_tweets:
+            posts = posts[:max_tweets]
+            break
+        cursor = _extract_bottom_cursor(tw_json)
+        if not cursor:
+            break
+    return posts
+
+
 async def fetch_via_cookies(username: str) -> dict | None:
     """Fetch profile+posts(+optional search) using TWITTER cookies on Vercel."""
     if not TWITTER_AUTH_TOKEN or not TWITTER_CT0:
@@ -1123,18 +1174,7 @@ async def fetch_via_cookies(username: str) -> dict | None:
     posts = []
     if uid:
         try:
-            tw_json = await x_graphql(
-                "UserTweets",
-                {
-                    "userId": uid,
-                    "count": 12,
-                    "includePromotedContent": False,
-                    "withQuickPromoteEligibilityTweetFields": True,
-                    "withVoice": True,
-                    "withV2Timeline": True,
-                },
-            )
-            posts = _extract_tweets_from_timeline(tw_json)
+            posts = await _fetch_tweets_paginated(uid, max_tweets=100)
         except Exception:
             posts = []
 
@@ -1802,7 +1842,7 @@ async def check_with_agentx(username: str) -> dict:
     sources["rateLimit"] = user_env.get("rateLimit")
 
     # 2) Posts + search probes + avatar cache in parallel
-    posts_task = run_agentx("posts", username, "-n", "12")
+    posts_task = run_agentx("posts", username, "-n", "100")
     from_task = run_agentx("search", "--type", "Latest", f"from:{username}", "-n", "10")
     people_task = run_agentx("search", "--type", "Latest", f"@{username}", "-n", "10")
     bare_task = run_agentx("search", "--type", "Latest", username, "-n", "10")
@@ -1822,6 +1862,21 @@ async def check_with_agentx(username: str) -> dict:
     posts = posts_env.get("data") if posts_env.get("ok") else []
     if not isinstance(posts, list):
         posts = []
+
+    # 2026-07-13 (KIRA): if agentx returned < 100 tweets, supplement via
+    # cookie GraphQL pagination to reach 100 for richer analytics.
+    if len(posts) < 100 and TWITTER_AUTH_TOKEN and TWITTER_CT0:
+        try:
+            uid_str = str((user_env.get("data") or {}).get("rest_id") or (user_env.get("data") or {}).get("id") or "")
+            if uid_str:
+                extra = await _fetch_tweets_paginated(uid_str, max_tweets=100 - len(posts))
+                existing_ids = {p.get("id") for p in posts}
+                for t in extra:
+                    if t.get("id") not in existing_ids:
+                        posts.append(t)
+                        existing_ids.add(t["id"])
+        except Exception:
+            pass  # fall back to whatever agentx returned
 
     from_hits = from_env.get("data") if from_env.get("ok") else []
     people_hits = people_env.get("data") if people_env.get("ok") else []
