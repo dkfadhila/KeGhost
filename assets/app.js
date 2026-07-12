@@ -407,6 +407,9 @@ function renderFeatureMenu(username, analytics){
     </div>
     <div id="cpResult"></div>
   </div>`;
+  // Pre-render ghost placeholder (lazy load on click)
+  const gh=$("#ghostPanel");
+  if(gh) gh.innerHTML=`<div class="gh-wrap" id="ghWrap" style="display:none"></div>`;
 }
 
 function togglePanel(name){
@@ -415,16 +418,33 @@ function togglePanel(name){
   const el=$("#"+id);
   if(!el) return;
   // Close others
-  Object.values(map).forEach(k=>{if(k!==id){const e=$("#"+k);if(e)e.querySelector(".show")?.classList?.remove("show");}});
+  Object.values(map).forEach(k=>{
+    if(k!==id){
+      const e=$("#"+k);
+      if(e){
+        const w=e.querySelector(".an-wrap,.gh-wrap,.cp-wrap");
+        if(w) w.style.display="none";
+      }
+    }
+  });
   // Toggle this one
   const inner=el.querySelector(".an-wrap,.gh-wrap,.cp-wrap");
-  if(inner) inner.classList.toggle("show");
+  if(!inner) return;
+  const isOpen=inner.style.display==="block"||inner.classList.contains("show");
+  if(isOpen){
+    inner.style.display="none";
+    inner.classList.remove("show");
+  } else {
+    inner.style.display="block";
+    inner.classList.add("show");
+  }
   // Update menu active state
   document.querySelectorAll(".fm-btn").forEach(b=>b.classList.remove("active"));
-  event?.target?.classList?.add("active");
-  // Lazy load ghost
+  if(event&&event.target) event.target.classList.add("active");
+  // Lazy load ghost followers on first open
   if(name==="ghost"&&inner&&!inner.dataset.loaded){
-    loadGhostFollowers(LAST?.username||LAST?.profile?.username||"");
+    const uname=LAST?.username||LAST?.profile?.username||"";
+    if(uname) loadGhostFollowers(uname);
   }
 }
 
@@ -515,15 +535,15 @@ async function loadGhostFollowers(username){
         <div class="nf-user-stats">0 tweets</div>
       </div>`;
     });
-    el.innerHTML=`<div class="gh-wrap show" data-loaded="1" id="ghWrap">
+    el.innerHTML=`<div class="gh-wrap show" data-loaded="1" id="ghWrap" style="display:block">
       <div class="gh-stats">
         <div class="gh-stat ghost"><div class="val">${data.ghost_count}</div><div class="lbl">Ghost</div></div>
         <div class="gh-stat"><div class="val">${data.active_count}</div><div class="lbl">Active</div></div>
         <div class="gh-stat verified"><div class="val">${data.verified_count}</div><div class="lbl">Verified</div></div>
         <div class="gh-stat"><div class="val">${data.total_checked}</div><div class="lbl">Dicek</div></div>
       </div>
-      ${gh.length?listHtml:'<div style="color:var(--muted);font-size:13px;padding:10px">Tidak ada ghost follower di 100 follower pertama 🎉</div>'}
-      ${data.has_more?'<div style="font-size:11px;color:var(--muted);padding:8px">Menampilkan 100 follower pertama. Ada lebih banyak — fitur pagination menyusul.</div>':''}
+      ${gh.length?listHtml:'<div style="color:var(--muted);font-size:13px;padding:10px">Tidak ada ghost follower di 100 follower pertama</div>'}
+      ${data.has_more?'<div style="font-size:11px;color:var(--muted);padding:8px">Menampilkan 100 follower pertama. Ada lebih banyak.</div>':''}
     </div>`;
   }catch(e){
     el.innerHTML=`<div class="gh-wrap show"><div style="color:#e89b9b;padding:14px">Error: ${escapeHtml(e.message||e)}</div></div>`;
