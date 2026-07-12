@@ -10,3 +10,4 @@ venv/
 *.log
 flora-ui-prompt.txt
 .DS_Store
+node_modules/
