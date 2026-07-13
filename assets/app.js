@@ -378,7 +378,7 @@ function renderHealthScore(score){
     </div>
     <div class="hs-info">
       <div class="hs-label">Account Health Score</div>
-      <div class="hs-desc">${label} — gabungan dari 8 layer audit di atas</div>
+      <div class="hs-sub">${label} — gabungan dari 8 layer audit di atas</div>
     </div>
   </div>`;
 }
